@@ -10,10 +10,13 @@
     "descOutros": "",
     "obs": "",
     "anexos": [],
-    "situacao": "",
-    "origem": "",
+    "situacao": "REALIZADO",
+    "origem": "EXTERNO",
     "obsResposta": "",
     "auxiliar": "",
-    "criadoEm": "2026-06-26T20:17:17.300Z"
+    "criadoEm": "2026-06-26T20:17:17.300Z",
+    "responsavelInterno": "",
+    "explicacaoInterna": "",
+    "atualizadoEm": "2026-06-26T20:17:28.915Z"
   }
 ]
