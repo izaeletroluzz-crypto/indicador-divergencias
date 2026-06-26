@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indicador de Divergências — Compras</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1a2e}
+
+header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);color:white;padding:14px 28px;box-shadow:0 2px 12px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:1.05rem;font-weight:700;letter-spacing:-.2px}
+header .hdr-sub{font-size:.74rem;opacity:.45;font-weight:400;margin-top:2px}
+
+/* MAIN NAV */
+#main-nav{background:white;border-bottom:2px solid #e2e6ea;display:flex;padding:0 24px}
+#main-nav button{background:none;border:none;padding:12px 18px;cursor:pointer;font-size:.88rem;color:#666;border-bottom:3px solid transparent;transition:all .2s;margin-bottom:-2px}
+#main-nav button.active{color:#3b82f6;border-bottom-color:#3b82f6;font-weight:700}
+#main-nav button:hover:not(.active){background:#f8f9fa;color:#1a1a2e}
+
+/* PERSON STRIP */
+#person-strip{background:#f8f9fa;border-bottom:1px solid #e2e6ea;display:flex;align-items:center;padding:7px 24px;gap:6px;flex-wrap:wrap}
+.ps-group{display:flex;align-items:center;gap:5px}
+.ps-lbl{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#bbb;margin-right:3px;white-space:nowrap}
+.ps-sep{width:1px;height:26px;background:#ddd;margin:0 8px}
+.ps-btn{padding:5px 14px;border-radius:20px;border:1.5px solid #ddd;background:white;cursor:pointer;font-size:.82rem;font-weight:700;color:#555;transition:all .2s;position:relative}
+.ps-btn:hover:not(.active){background:#eff6ff;border-color:#93c5fd;color:#1d4ed8}
+.ps-btn.active.comp{background:#dbeafe;border-color:#3b82f6;color:#1d4ed8}
+.ps-btn.active.aux{background:#f3e8ff;border-color:#a855f7;color:#7e22ce}
+.ps-badge{position:absolute;top:-7px;right:-7px;background:#ef4444;color:white;font-size:.6rem;font-weight:900;min-width:17px;height:17px;border-radius:99px;padding:0 4px;display:flex;align-items:center;justify-content:center;border:2px solid #f8f9fa;pointer-events:none;line-height:1}
+
+/* PAGES */
+.page{display:none;padding:22px 26px;max-width:1280px;margin:0 auto}
+.page.active{display:block}
+
+/* CARDS (used on person pages) */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:11px;margin-bottom:20px}
+.card{background:white;border-radius:10px;padding:15px 14px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-top:4px solid #e2e6ea}
+.card.c-total{border-top-color:#6366f1}.card.c-pend{border-top-color:#94a3b8}
+.card.c-verif{border-top-color:#3b82f6}.card.c-real{border-top-color:#10b981}
+.card.c-aux{border-top-color:#a855f7}.card.c-ext{border-top-color:#ef4444}.card.c-int{border-top-color:#f59e0b}
+.card .val{font-size:1.85rem;font-weight:800;margin:4px 0 2px}
+.card .lbl{font-size:.68rem;color:#aaa;text-transform:uppercase;letter-spacing:.4px}
+
+/* KPI CARDS (dashboard) */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px}
+.kpi-card{background:white;border-radius:14px;padding:20px 18px 16px;box-shadow:0 2px 8px rgba(0,0,0,.07);position:relative;overflow:hidden;border-left:5px solid var(--accent);cursor:default;transition:transform .15s,box-shadow .18s}
+.kpi-card:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(0,0,0,.11)}
+.kpi-card::after{content:'';position:absolute;top:-18px;right:-18px;width:72px;height:72px;background:var(--light);border-radius:50%;opacity:.8}
+.kpi-icon{font-size:1.4rem;margin-bottom:10px;line-height:1}
+.kpi-val{font-size:2.4rem;font-weight:900;color:#1a1a2e;line-height:1;margin-bottom:5px;letter-spacing:-.5px}
+.kpi-lbl{font-size:.69rem;color:#aaa;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+
+/* DASH LAYOUT */
+.dash-bar{background:white;border-radius:12px;padding:13px 18px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+
+/* CHART CARDS */
+.chart-card{background:white;border-radius:14px;padding:22px 22px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07);margin-bottom:14px}
+.chart-card:last-child{margin-bottom:0}
+.chart-card-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+.chart-card-title{font-size:.95rem;font-weight:800;color:#1a1a2e}
+.chart-card-sub{font-size:.74rem;color:#bbb;margin-top:2px}
+.chart-card canvas{max-height:235px}
+.chart-badge{font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:99px;background:#f0f2f5;color:#888;white-space:nowrap;align-self:flex-start}
+
+/* CHARTS (used on other pages, keep for compat) */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.chart-box{background:white;border-radius:10px;padding:17px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.chart-box h3{font-size:.7rem;color:#bbb;margin-bottom:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px}
+.chart-box canvas{max-height:215px}
+.chart-full{grid-column:1/-1}
+
+/* TABLE */
+.tbl-wrap{background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.tbl-head{display:flex;justify-content:space-between;align-items:center;padding:13px 18px;border-bottom:1px solid #f0f2f5;flex-wrap:wrap;gap:8px}
+.tbl-head h3{font-size:.93rem;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:.83rem}
+th{background:#f8f9fa;padding:9px 13px;text-align:left;font-size:.7rem;color:#888;text-transform:uppercase;letter-spacing:.4px;font-weight:800;white-space:nowrap}
+td{padding:9px 13px;border-top:1px solid #f4f5f7;vertical-align:middle}
+tr:hover td{background:#fafbff}
+tr.tr-done td{opacity:.42;background:#fafafa}
+tr.tr-done:hover td{opacity:.55;background:#f4f5f7}
+tr.tr-done td .badge:not(.b-realizado){filter:grayscale(1)}
+tr.tr-done td .b-realizado{opacity:1;filter:none}
+.empty{text-align:center;color:#ccc;padding:44px;font-style:italic;font-size:.88rem}
+
+/* FILTERS */
+.filters{background:white;border-radius:10px;padding:13px 16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end}
+.fg{display:flex;flex-direction:column;min-width:120px}
+.fg label{font-size:.74rem;font-weight:700;color:#555;margin-bottom:3px}
+.fg input,.fg select{padding:6px 9px;font-size:.83rem;border:1.5px solid #e2e6ea;border-radius:7px;background:#fafafa;color:#1a1a2e}
+.fg input:focus,.fg select:focus{outline:none;border-color:#3b82f6;background:white}
+
+/* FORM */
+.form-wrap{max-width:660px}
+.form-card{background:white;border-radius:10px;padding:22px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.form-card h2{font-size:.97rem;font-weight:700;margin-bottom:16px}
+.sec{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#3b82f6;margin:16px 0 9px;border-bottom:1.5px solid #e2e6ea;padding-bottom:4px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:11px}
+.frow.s1{grid-template-columns:1fr}
+.frow.s3{grid-template-columns:1fr 1fr 1fr}
+.fg2{display:flex;flex-direction:column}
+.fg2 label{font-size:.77rem;font-weight:700;color:#444;margin-bottom:3px}
+.req{color:#ef4444;margin-left:2px}
+input,select,textarea{width:100%;padding:8px 10px;border:1.5px solid #e2e6ea;border-radius:7px;font-size:.87rem;color:#1a1a2e;background:#fafafa;transition:border-color .2s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#3b82f6;background:white}
+textarea{resize:vertical;min-height:66px}
+
+/* TOGGLE */
+.tog-group{display:flex;gap:7px;flex-wrap:wrap}
+.tog{flex:1;min-width:100px;padding:9px 7px;border:2px solid #e2e6ea;border-radius:8px;background:#fafafa;cursor:pointer;font-size:.82rem;font-weight:700;text-align:center;color:#666;transition:all .2s}
+.tog:hover:not([class*="sel-"]){background:#f0f2f5;border-color:#cbd5e1}
+.tog.sel-blue{border-color:#3b82f6;background:#dbeafe;color:#1d4ed8}
+.tog.sel-red{border-color:#ef4444;background:#fee2e2;color:#b91c1c}
+.tog.sel-amber{border-color:#f59e0b;background:#fef3c7;color:#92400e}
+.tog.sel-green{border-color:#10b981;background:#d1fae5;color:#065f46}
+
+/* CAT */
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+
+/* UPLOAD */
+.upload-area{border:2px dashed #cbd5e1;border-radius:8px;padding:18px;text-align:center;cursor:pointer;background:#fafafa;color:#aaa;transition:all .2s;font-size:.83rem}
+.upload-area:hover{border-color:#3b82f6;background:#eff6ff;color:#3b82f6}
+.upload-area input{display:none}
+.prev-grid{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.prev-item{position:relative}
+.prev-item img{width:68px;height:68px;object-fit:cover;border-radius:6px;border:1.5px solid #e2e6ea}
+.prev-item .rm{position:absolute;top:-5px;right:-5px;background:#ef4444;color:white;border:none;border-radius:50%;width:17px;height:17px;font-size:9px;cursor:pointer;font-weight:800;display:flex;align-items:center;justify-content:center}
+
+/* BUTTONS */
+.btn{padding:8px 18px;border:none;border-radius:7px;font-size:.86rem;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-primary{background:#3b82f6;color:white}.btn-primary:hover{background:#2563eb}
+.btn-ghost{background:#e5e7eb;color:#444}.btn-ghost:hover{background:#d1d5db}
+.btn-green{background:#10b981;color:white}.btn-green:hover{background:#059669}
+.btn-purple{background:#a855f7;color:white}.btn-purple:hover{background:#9333ea}
+.btn-red{background:#ef4444;color:white}.btn-red:hover{background:#dc2626}
+.btn-sm{font-size:.74rem;padding:4px 10px;border-radius:5px}
+
+/* BADGES */
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:800;white-space:nowrap}
+.b-ext,.b-externo{background:#fee2e2;color:#b91c1c}
+.b-int,.b-interno{background:#fef3c7;color:#92400e}
+.b-pend,.b-pendente{background:#f1f5f9;color:#64748b}
+.b-verificando{background:#dbeafe;color:#1d4ed8}
+.b-realizado{background:#d1fae5;color:#065f46}
+.b-aux{background:#f3e8ff;color:#7e22ce}
+
+/* HISTORY CHECKBOX */
+.hist-chk{width:18px;height:18px;border-radius:5px;border:2px solid #d1d5db;background:white;cursor:pointer;appearance:none;-webkit-appearance:none;display:block;margin:0 auto;transition:all .15s;position:relative;flex-shrink:0}
+.hist-chk:checked{background:#10b981;border-color:#10b981}
+.hist-chk:checked::after{content:'✓';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-size:.72rem;font-weight:900;line-height:1}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:white;border-radius:13px;padding:24px;max-width:540px;width:93%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative}
+.modal-x{position:absolute;top:14px;right:16px;background:none;border:none;font-size:1.25rem;cursor:pointer;color:#aaa;line-height:1}
+.modal-x:hover{color:#333}
+.modal h3{font-size:.97rem;font-weight:700;margin-bottom:3px;padding-right:26px}
+.modal .meta{font-size:.78rem;color:#aaa;margin-bottom:14px}
+.divider{border:none;border-top:1px solid #f0f2f5;margin:15px 0}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px;background:#f8f9fa;border-radius:8px;padding:11px 13px;margin-bottom:14px}
+.info-item .ik{font-size:.68rem;color:#bbb;font-weight:800;text-transform:uppercase}
+.info-item .iv{font-size:.85rem;color:#1a1a2e;font-weight:600}
+.mfg{display:flex;flex-direction:column;margin-bottom:12px}
+.mfg label{font-size:.75rem;font-weight:800;color:#444;margin-bottom:5px}
+
+/* TOAST */
+#toast{position:fixed;bottom:22px;right:22px;padding:10px 18px;border-radius:8px;font-weight:700;font-size:.85rem;opacity:0;pointer-events:none;transition:opacity .3s;z-index:9999}
+#toast.show{opacity:1}
+#toast.ok{background:#10b981;color:white}
+#toast.warn{background:#f59e0b;color:white}
+#toast.err{background:#ef4444;color:white}
+
+/* PERSON HEADER */
+.person-hdr{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.person-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}
+
+@media(max-width:680px){
+  .charts,.dash-row2{grid-template-columns:1fr}
+  .frow{grid-template-columns:1fr}
+  .frow.s3{grid-template-columns:1fr}
+  .cat-grid{grid-template-columns:1fr 1fr}
+  .page{padding:14px}
+  #main-nav,#person-strip{padding:0 12px;overflow-x:auto}
+  .kpi-grid{grid-template-columns:repeat(3,1fr)}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📋 Indicador de Divergências</h1>
+    <div class="hdr-sub">Setor de Compras</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <div id="db-status" style="font-size:.74rem;display:flex;align-items:center;gap:5px;opacity:.7;">
+      <span id="db-dot" style="width:7px;height:7px;border-radius:50%;background:#94a3b8;display:inline-block;"></span>
+      <span id="db-lbl">offline</span>
+    </div>
+    <div id="hdr-clock" style="font-size:.8rem;opacity:.4;font-variant-numeric:tabular-nums;"></div>
+  </div>
+</header>
+
+<nav id="main-nav">
+  <button class="active" onclick="showMain('dashboard')">Dashboard</button>
+  <button onclick="showMain('registro')">Registrar</button>
+  <button onclick="showMain('historico')">Histórico</button>
+  <button onclick="showMain('config')">⚙️ Configurações</button>
+</nav>
+
+<div id="person-strip"></div>
+
+<!-- ════ DASHBOARD ════ -->
+<div id="page-dashboard" class="page active">
+
+  <!-- Filtros -->
+  <div class="dash-bar">
+    <div class="fg"><label>De</label><input type="month" id="d-ini"></div>
+    <div class="fg"><label>Até</label><input type="month" id="d-fim"></div>
+    <div class="fg"><label>Comprador</label>
+      <select id="d-comp"><option value="">Todos</option></select>
+    </div>
+    <button class="btn btn-primary" onclick="renderDashboard()">Filtrar</button>
+    <button class="btn btn-ghost" onclick="clearDF()">Limpar</button>
+    <span id="dash-ts" style="margin-left:auto;font-size:.74rem;color:#ccc;"></span>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card" style="--accent:#6366f1;--light:#eef2ff;">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-val" id="dc-tot">0</div>
+      <div class="kpi-lbl">Total</div>
+    </div>
+    <div class="kpi-card" style="--accent:#94a3b8;--light:#f8fafc;">
+      <div class="kpi-icon">⏳</div>
+      <div class="kpi-val" id="dc-pend">0</div>
+      <div class="kpi-lbl">Sem Resposta</div>
+    </div>
+    <div class="kpi-card" style="--accent:#3b82f6;--light:#eff6ff;">
+      <div class="kpi-icon">🔍</div>
+      <div class="kpi-val" id="dc-ver">0</div>
+      <div class="kpi-lbl">Verificando</div>
+    </div>
+    <div class="kpi-card" style="--accent:#10b981;--light:#f0fdf4;">
+      <div class="kpi-icon">✅</div>
+      <div class="kpi-val" id="dc-real">0</div>
+      <div class="kpi-lbl">Realizado</div>
+    </div>
+    <div class="kpi-card" style="--accent:#ef4444;--light:#fef2f2;">
+      <div class="kpi-icon">🏭</div>
+      <div class="kpi-val" id="dc-ext">0</div>
+      <div class="kpi-lbl">Erros Externos</div>
+    </div>
+    <div class="kpi-card" style="--accent:#f59e0b;--light:#fffbeb;">
+      <div class="kpi-icon">🏢</div>
+      <div class="kpi-val" id="dc-int">0</div>
+      <div class="kpi-lbl">Erros Internos</div>
+    </div>
+  </div>
+
+  <!-- Linha de 2 gráficos -->
+  <div class="dash-row2">
+    <div class="chart-card" style="margin-bottom:0;">
+      <div class="chart-card-hdr">
+        <div><div class="chart-card-title">Por Categoria</div><div class="chart-card-sub">Distribuição por tipo de erro</div></div>
+        <span class="chart-badge">Barras</span>
+      </div>
+      <canvas id="ch-cat"></canvas>
+    </div>
+    <div class="chart-card" style="margin-bottom:0;">
+      <div class="chart-card-hdr">
+        <div><div class="chart-card-title">Origem do Erro</div><div class="chart-card-sub">Externo vs Interno</div></div>
+        <span class="chart-badge">Rosca</span>
+      </div>
+      <canvas id="ch-orig"></canvas>
+    </div>
+  </div>
+  <div style="height:14px;"></div>
+
+  <!-- Comprador -->
+  <div class="chart-card">
+    <div class="chart-card-hdr">
+      <div><div class="chart-card-title">Por Comprador</div><div class="chart-card-sub">Categorias por responsável</div></div>
+      <span class="chart-badge">Agrupado</span>
+    </div>
+    <canvas id="ch-comp"></canvas>
+  </div>
+
+  <!-- Mensal -->
+  <div class="chart-card">
+    <div class="chart-card-hdr">
+      <div><div class="chart-card-title">Evolução Mensal</div><div class="chart-card-sub">Erros externos e internos por mês</div></div>
+      <span class="chart-badge">Temporal</span>
+    </div>
+    <canvas id="ch-mes"></canvas>
+  </div>
+
+  <!-- Fornecedores -->
+  <div class="chart-card">
+    <div class="chart-card-hdr">
+      <div><div class="chart-card-title">Ranking de Fornecedores</div><div class="chart-card-sub">Top 10 com mais erros externos</div></div>
+      <span class="chart-badge">Top 10</span>
+    </div>
+    <canvas id="ch-forn"></canvas>
+    <p id="no-forn" style="display:none;color:#ccc;font-style:italic;text-align:center;padding:28px 0;font-size:.84rem;">Nenhuma divergência externa registrada ainda.</p>
+  </div>
+
+</div>
+
+<!-- ════ REGISTRO ════ -->
+<div id="page-registro" class="page">
+  <div class="form-wrap">
+    <div class="form-card">
+      <h2>Registrar Nova Divergência</h2>
+
+      <div class="sec">Identificação</div>
+      <div class="frow s3">
+        <div class="fg2"><label>Data<span class="req">*</span></label><input type="date" id="f-data"></div>
+        <div class="fg2"><label>Nº NF<span class="req">*</span></label><input type="text" id="f-nf" placeholder="Ex: 123456"></div>
+        <div class="fg2"><label>Comprador<span class="req">*</span></label>
+          <select id="f-dest"><option value="">Selecione...</option></select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fg2"><label>Fornecedor<span class="req">*</span></label><input type="text" id="f-forn" placeholder="Nome do fornecedor"></div>
+        <div class="fg2"><label>Registrado por</label><input type="text" id="f-resp" placeholder="Seu nome"></div>
+      </div>
+
+      <div class="sec">Categoria<span class="req">*</span></div>
+      <div class="cat-grid" id="cat-grid" style="margin-bottom:10px;"></div>
+      <div class="frow s1" id="row-out" style="display:none;margin-bottom:10px;">
+        <div class="fg2"><label>Descrição do erro<span class="req">*</span></label><input type="text" id="f-out" placeholder="Descreva brevemente..."></div>
+      </div>
+
+      <div class="sec">Observação e Anexo</div>
+      <div class="frow s1" style="margin-bottom:10px;">
+        <div class="fg2"><label>Observação</label><textarea id="f-obs" placeholder="Detalhes adicionais..."></textarea></div>
+      </div>
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('f-file').click()">
+        <input type="file" id="f-file" multiple accept="image/*,.pdf" onchange="handleFiles(this.files)">
+        <div style="font-size:1.5rem;margin-bottom:3px;">📎</div>
+        <strong>Clique para adicionar fotos ou arquivos</strong><br>
+        <span style="font-size:.74rem;">Ou <strong>cole (Ctrl+V)</strong> um print diretamente aqui · Imagens e PDFs — máx. ~2MB</span>
+      </div>
+      <div class="prev-grid" id="prev-grid"></div>
+
+      <div style="display:flex;gap:9px;margin-top:18px;">
+        <button class="btn btn-primary" onclick="salvar()">Salvar Divergência</button>
+        <button class="btn btn-ghost" onclick="resetForm()">Limpar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ PESSOA ════ -->
+<div id="page-pessoa" class="page">
+  <div id="pessoa-content"></div>
+</div>
+
+<!-- ════ HISTÓRICO ════ -->
+<div id="page-historico" class="page">
+  <div class="filters">
+    <div class="fg"><label>Responsável</label>
+      <select id="h-dest"><option value="">Todos</option></select>
+    </div>
+    <div class="fg"><label>Categoria</label>
+      <select id="h-cat"><option value="">Todas</option></select>
+    </div>
+    <div class="fg"><label>Origem</label>
+      <select id="h-orig"><option value="">Todas</option><option value="EXTERNO">Externo</option><option value="INTERNO">Interno</option></select>
+    </div>
+    <div class="fg"><label>Situação</label>
+      <select id="h-sit">
+        <option value="">Todas</option>
+        <option value="NONE">Sem resposta</option>
+        <option value="VERIFICANDO">Verificando</option>
+        <option value="REALIZADO">Realizado</option>
+      </select>
+    </div>
+    <div class="fg"><label>Mês</label><input type="month" id="h-mes"></div>
+    <div class="fg"><label>NF / Fornecedor</label><input type="text" id="h-busca" placeholder="Buscar..."></div>
+    <button class="btn btn-primary" onclick="renderHistorico()">Filtrar</button>
+    <button class="btn btn-ghost" onclick="clearHF()">Limpar</button>
+    <button class="btn btn-green" onclick="exportCSV()">⬇ CSV</button>
+  </div>
+  <div class="tbl-wrap">
+    <div class="tbl-head">
+      <h3>Histórico Completo</h3>
+      <span id="h-cnt" style="font-size:.8rem;color:#bbb;"></span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>Data</th><th>NF</th><th>Comprador</th><th>Fornecedor</th>
+          <th>Categoria</th><th>Origem</th><th>Situação</th><th>Auxiliar</th><th>Registrado por</th><th style="text-align:center;">✓</th>
+        </tr></thead>
+        <tbody id="h-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════ CONFIGURAÇÕES ════ -->
+<div id="page-config" class="page">
+  <div style="max-width:760px;margin:0 auto;">
+    <h2 style="font-size:1.1rem;font-weight:800;margin-bottom:20px;">⚙️ Configurações</h2>
+
+    <!-- Compradores -->
+    <div class="form-card" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:.95rem;font-weight:800;">👤 Compradores</div>
+        <span id="cfg-comp-count" style="font-size:.74rem;color:#aaa;"></span>
+      </div>
+      <div id="cfg-comp-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="cfg-comp-input" placeholder="Nome do comprador..." style="flex:1;padding:8px 12px;border:1.5px solid #e2e6ea;border-radius:8px;font-size:.85rem;outline:none;" onkeydown="if(event.key==='Enter')addCfgItem('comp')">
+        <button class="btn btn-primary" onclick="addCfgItem('comp')">+ Adicionar</button>
+      </div>
+    </div>
+
+    <!-- Auxiliares -->
+    <div class="form-card" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:.95rem;font-weight:800;">🤝 Auxiliares</div>
+        <span id="cfg-aux-count" style="font-size:.74rem;color:#aaa;"></span>
+      </div>
+      <div id="cfg-aux-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="cfg-aux-input" placeholder="Nome do auxiliar..." style="flex:1;padding:8px 12px;border:1.5px solid #e2e6ea;border-radius:8px;font-size:.85rem;outline:none;" onkeydown="if(event.key==='Enter')addCfgItem('aux')">
+        <button class="btn btn-primary" onclick="addCfgItem('aux')">+ Adicionar</button>
+      </div>
+    </div>
+
+    <!-- Categorias -->
+    <div class="form-card" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:.95rem;font-weight:800;">🏷️ Categorias</div>
+        <span id="cfg-cats-count" style="font-size:.74rem;color:#aaa;"></span>
+      </div>
+      <div id="cfg-cats-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="cfg-cats-input" placeholder="Nome da categoria..." style="flex:1;padding:8px 12px;border:1.5px solid #e2e6ea;border-radius:8px;font-size:.85rem;outline:none;" onkeydown="if(event.key==='Enter')addCfgItem('cats')">
+        <button class="btn btn-primary" onclick="addCfgItem('cats')">+ Adicionar</button>
+      </div>
+    </div>
+
+    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:13px 16px;font-size:.82rem;color:#92400e;">
+      ⚠️ Remover um comprador/auxiliar não apaga os registros já vinculados a ele — apenas remove a opção para novos registros.
+    </div>
+  </div>
+</div>
+
+<!-- ════ MODAL RESPOSTA ════ -->
+<div class="modal-bg" id="resp-bg" onclick="closeResp(event)">
+  <div class="modal">
+    <button class="modal-x" onclick="closeResp(null,true)">×</button>
+    <h3 id="rm-title"></h3>
+    <div class="meta" id="rm-meta"></div>
+    <div class="info-grid" id="rm-info"></div>
+    <hr class="divider">
+    <div id="rm-fields"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn btn-green" id="rm-save">Salvar</button>
+      <button class="btn btn-ghost" onclick="closeResp(null,true)">Cancelar</button>
+    </div>
+    <div id="rm-aux"></div>
+  </div>
+</div>
+
+<!-- ════ MODAL ANEXOS ════ -->
+<div class="modal-bg" id="anx-bg" onclick="closeAnx(event)">
+  <div class="modal" style="max-width:780px;">
+    <button class="modal-x" onclick="closeAnx(null,true)">×</button>
+    <h3 id="anx-title"></h3>
+    <div class="meta" id="anx-meta"></div>
+    <div id="anx-body" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- ════ MODAL ZOOM IMAGEM ════ -->
+<div class="modal-bg" id="img-bg" onclick="closeImg(event)" style="background:rgba(0,0,0,.82);">
+  <div style="max-width:90vw;max-height:90vh;position:relative;">
+    <button onclick="closeImg(null,true)" style="position:absolute;top:-36px;right:0;background:none;border:none;color:white;font-size:1.8rem;cursor:pointer;line-height:1;">×</button>
+    <img id="im-img" src="" alt="" style="max-width:90vw;max-height:85vh;border-radius:8px;display:block;">
+    <div id="im-name" style="color:rgba(255,255,255,.6);font-size:.8rem;margin-top:8px;text-align:center;"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══ SUPABASE ══════════════════════════════════════════
+// ⚙️ PREENCHA COM SUAS CREDENCIAIS DO SUPABASE:
+const SUPABASE_URL  = '';   // ex: https://xyzxyz.supabase.co
+const SUPABASE_KEY  = '';   // ex: eyJhbGci... (anon/public key)
+
+let sb = null;
+if (SUPABASE_URL && SUPABASE_KEY) {
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+function setDbStatus(state) {
+  const dot = document.getElementById('db-dot');
+  const lbl = document.getElementById('db-lbl');
+  if (!dot) return;
+  const map = {
+    ok:      { color:'#10b981', text:'banco conectado' },
+    sync:    { color:'#f59e0b', text:'sincronizando…'  },
+    offline: { color:'#94a3b8', text:'modo offline'     },
+    error:   { color:'#ef4444', text:'erro de conexão'  },
+  };
+  const s = map[state] || map.offline;
+  dot.style.background = s.color;
+  lbl.textContent = s.text;
+}
+
+// ═══ CONFIG ════════════════════════════════════════════
+let COMPRADORES = JSON.parse(localStorage.getItem('cfg_comp') || '["João Victor","Matheus","Tanabi"]');
+let AUXILIARES  = JSON.parse(localStorage.getItem('cfg_aux')  || '["Lucas","Felipe","Isadora"]');
+let CATS        = JSON.parse(localStorage.getItem('cfg_cats') || '["Sem ordem de compra","Preço divergente","Produto errado","Outros"]');
+
+async function persistConfig() {
+  localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES));
+  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
+  localStorage.setItem('cfg_cats', JSON.stringify(CATS));
+  if (!sb) return;
+  await sb.from('configuracoes').upsert([
+    { chave: 'compradores', valor: COMPRADORES },
+    { chave: 'auxiliares',  valor: AUXILIARES  },
+    { chave: 'categorias',  valor: CATS        },
+  ], { onConflict: 'chave' });
+}
+
+const CAT_EMOJIS = {'Sem ordem de compra':'📄','Preço divergente':'💰','Produto errado':'📦','Outros':'✏️'};
+function catEmoji(c) { return CAT_EMOJIS[c] || '🔖'; }
+
+// ═══ DATA ══════════════════════════════════════════════
+let dados = JSON.parse(localStorage.getItem('div_v3') || '[]');
+let tempFiles  = [];
+let catSel     = '';
+let editingId  = null;
+let rmSit = '', rmOrig = '', auxOrig = '';
+let currentPerson = null;
+
+function persist() {
+  localStorage.setItem('div_v3', JSON.stringify(dados));
+}
+
+async function persistItem(d) {
+  persist();
+  if (!sb) return;
+  setDbStatus('sync');
+  const row = {
+    id: d.id, data: d.data, nf: d.nf, destino: d.destino,
+    fornecedor: d.fornecedor, registrado_por: d.registradoPor || '',
+    categoria: d.categoria, desc_outros: d.descOutros || '',
+    obs: d.obs || '', anexos: d.anexos || [],
+    situacao: d.situacao || '', origem: d.origem || '',
+    obs_resposta: d.obsResposta || '', auxiliar: d.auxiliar || '',
+    conferido: d.conferido || false,
+    criado_em: d.criadoEm || null, atualizado_em: d.atualizadoEm || null
+  };
+  const { error } = await sb.from('divergencias').upsert([row], { onConflict: 'id' });
+  if (error) { setDbStatus('error'); console.error(error); }
+  else setDbStatus('ok');
+}
+
+async function deleteItem(id) {
+  dados = dados.filter(x => x.id !== id);
+  persist();
+  if (!sb) return;
+  await sb.from('divergencias').delete().eq('id', id);
+}
+
+async function loadFromSupabase() {
+  if (!sb) { setDbStatus('offline'); return; }
+  setDbStatus('sync');
+  try {
+    // Config
+    const { data: cfg } = await sb.from('configuracoes').select('*');
+    if (cfg && cfg.length) {
+      cfg.forEach(row => {
+        if (row.chave === 'compradores') COMPRADORES = row.valor;
+        if (row.chave === 'auxiliares')  AUXILIARES  = row.valor;
+        if (row.chave === 'categorias')  CATS        = row.valor;
+      });
+      localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES));
+      localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
+      localStorage.setItem('cfg_cats', JSON.stringify(CATS));
+    }
+    // Dados
+    const { data: rows, error } = await sb.from('divergencias').select('*').order('id', { ascending: false });
+    if (error) throw error;
+    if (rows) {
+      dados = rows.map(r => ({
+        id: r.id, data: r.data, nf: r.nf, destino: r.destino,
+        fornecedor: r.fornecedor, registradoPor: r.registrado_por || '',
+        categoria: r.categoria, descOutros: r.desc_outros || '',
+        obs: r.obs || '', anexos: r.anexos || [],
+        situacao: r.situacao || '', origem: r.origem || '',
+        obsResposta: r.obs_resposta || '', auxiliar: r.auxiliar || '',
+        conferido: r.conferido || false,
+        criadoEm: r.criado_em, atualizadoEm: r.atualizado_em
+      }));
+      persist();
+    }
+    setDbStatus('ok');
+    // Garante "Outros" sempre presente
+    if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
+    renderAllDynamic();
+    renderDashboard();
+  } catch(e) {
+    console.error('Supabase load error:', e);
+    setDbStatus('error');
+    toast('Erro ao conectar ao banco. Usando dados locais.','warn');
+  }
+}
+
+function today()   { return new Date().toISOString().split('T')[0]; }
+
+// ═══ DYNAMIC UI ════════════════════════════════════════
+function renderPersonStrip() {
+  const strip = document.getElementById('person-strip');
+  let html = '<div class="ps-group"><span class="ps-lbl">Compradores</span>';
+  COMPRADORES.forEach(n => {
+    const short = n.split(' ')[0];
+    html += `<button class="ps-btn comp" data-name="${n}" onclick="showPerson('${n}')">${short}</button>`;
+  });
+  html += '</div><div class="ps-sep"></div><div class="ps-group"><span class="ps-lbl">Auxiliares</span>';
+  AUXILIARES.forEach(n => {
+    html += `<button class="ps-btn aux" data-name="${n}" onclick="showPerson('${n}')">${n}</button>`;
+  });
+  html += '</div>';
+  strip.innerHTML = html;
+  updatePersonBadges();
+}
+
+function renderDestSelects() {
+  ['f-dest','h-dest'].forEach(sid => {
+    const sel = document.getElementById(sid);
+    if (!sel) return;
+    const isH = sid === 'h-dest';
+    const blank = isH ? '<option value="">Todos</option>' : '<option value="">Selecione...</option>';
+    let html = blank + '<optgroup label="── Compradores ──">';
+    COMPRADORES.forEach(n => html += `<option>${n}</option>`);
+    html += '</optgroup><optgroup label="── Auxiliares ──">';
+    AUXILIARES.forEach(n => html += `<option>${n}</option>`);
+    html += '</optgroup>';
+    sel.innerHTML = html;
+  });
+  // Dashboard comprador filter (compradores only)
+  const dc = document.getElementById('d-comp');
+  if (dc) {
+    let html = '<option value="">Todos</option>';
+    COMPRADORES.forEach(n => html += `<option>${n}</option>`);
+    dc.innerHTML = html;
+  }
+}
+
+function renderCatGrid() {
+  const grid = document.getElementById('cat-grid');
+  if (!grid) return;
+  grid.innerHTML = CATS.map(c =>
+    `<button type="button" class="tog" data-cat="${c}" onclick="selCat('${c.replace(/'/g,"\\'")}'">${catEmoji(c)} ${c}</button>`
+  ).join('');
+  // History category select
+  const hc = document.getElementById('h-cat');
+  if (hc) {
+    let html = '<option value="">Todas</option>';
+    CATS.forEach(c => html += `<option>${c}</option>`);
+    hc.innerHTML = html;
+  }
+}
+
+function renderConfigPage() {
+  ['comp','aux','cats'].forEach(type => {
+    const list = document.getElementById(`cfg-${type}-list`);
+    const count = document.getElementById(`cfg-${type}-count`);
+    const arr = type==='comp' ? COMPRADORES : type==='aux' ? AUXILIARES : CATS;
+    count.textContent = `${arr.length} item${arr.length!==1?'s':''}`;
+    list.innerHTML = arr.map((item,i) =>
+      `<div style="display:inline-flex;align-items:center;gap:5px;background:#f0f2f5;border:1.5px solid #e2e6ea;border-radius:20px;padding:4px 10px 4px 12px;font-size:.83rem;font-weight:600;">
+        <span>${item}</span>
+        <button onclick="removeCfgItem('${type}',${i})" title="Remover" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1rem;line-height:1;padding:0 2px;font-weight:900;">×</button>
+      </div>`
+    ).join('');
+  });
+}
+
+function addCfgItem(type) {
+  const input = document.getElementById(`cfg-${type}-input`);
+  const val = input.value.trim();
+  if (!val) return;
+  const arr = type==='comp' ? COMPRADORES : type==='aux' ? AUXILIARES : CATS;
+  if (arr.map(s=>s.toLowerCase()).includes(val.toLowerCase())) {
+    toast('Já existe um item com esse nome.','warn'); return;
+  }
+  arr.push(val);
+  persistConfig();
+  input.value='';
+  renderAllDynamic();
+  toast(`✓ "${val}" adicionado!`,'ok');
+}
+
+function removeCfgItem(type, idx) {
+  const arr = type==='comp' ? COMPRADORES : type==='aux' ? AUXILIARES : CATS;
+  if (type === 'cats' && arr[idx].toLowerCase() === 'outros') {
+    toast('A categoria "Outros" é obrigatória e não pode ser removida.','warn'); return;
+  }
+  const removed = arr.splice(idx, 1)[0];
+  persistConfig();
+  renderAllDynamic();
+  toast(`"${removed}" removido.`,'ok');
+}
+
+function renderAllDynamic() {
+  renderPersonStrip();
+  renderDestSelects();
+  renderCatGrid();
+  renderConfigPage();
+}
+
+// ═══ NAV ═══════════════════════════════════════════════
+function showMain(id) {
+  currentPerson = null;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const ids = ['dashboard','registro','historico','config'];
+  document.querySelectorAll('#main-nav button').forEach((b,i) => b.classList.toggle('active', ids[i]===id));
+  document.querySelectorAll('.ps-btn').forEach(b => b.classList.remove('active'));
+  if (id === 'dashboard') renderDashboard();
+  if (id === 'historico') renderHistorico();
+  if (id === 'config') renderConfigPage();
+}
+
+function showPerson(name) {
+  currentPerson = name;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-pessoa').classList.add('active');
+  document.querySelectorAll('#main-nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.ps-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.name === name)
+  );
+  renderPersonPage(name);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('f-data').value = today();
+});
+
+// ═══ FORM ══════════════════════════════════════════════
+function selCat(v) {
+  catSel = v;
+  document.querySelectorAll('#cat-grid .tog').forEach(btn =>
+    btn.classList.toggle('sel-blue', btn.dataset.cat === v)
+  );
+  const isOutros = v.toLowerCase() === 'outros';
+  document.getElementById('row-out').style.display = isOutros ? '' : 'none';
+  if (!isOutros) document.getElementById('f-out').value = '';
+}
+
+function handleFiles(files) {
+  Array.from(files).forEach(file => {
+    if (file.size > 2.5*1024*1024) { toast(`"${file.name}" muito grande (máx ~2MB)`, 'warn'); return; }
+    const r = new FileReader();
+    r.onload = e => { tempFiles.push({ name: file.name, dataUrl: e.target.result, type: file.type }); renderPrev(); };
+    r.readAsDataURL(file);
+  });
+  document.getElementById('f-file').value = '';
+}
+
+function renderPrev() {
+  document.getElementById('prev-grid').innerHTML = tempFiles.map((f,i) =>
+    f.type.startsWith('image/')
+      ? `<div class="prev-item"><img src="${f.dataUrl}"><button class="rm" onclick="rmFile(${i})">×</button></div>`
+      : `<div style="display:flex;align-items:center;gap:6px;background:#f0f2f5;border-radius:6px;padding:6px 10px;font-size:.78rem;">📄 ${esc(f.name)} <button class="rm" style="position:static;margin-left:auto;" onclick="rmFile(${i})">×</button></div>`
+  ).join('');
+}
+
+function rmFile(i) { tempFiles.splice(i,1); renderPrev(); }
+
+function salvar() {
+  const data = document.getElementById('f-data').value;
+  const nf   = document.getElementById('f-nf').value.trim();
+  const dest = document.getElementById('f-dest').value;
+  const forn = document.getElementById('f-forn').value.trim();
+  if (!data||!nf||!dest||!forn||!catSel) { toast('Preencha todos os campos obrigatórios.','warn'); return; }
+  if (catSel==='Outros' && !document.getElementById('f-out').value.trim()) { toast('Descreva o erro em "Outros".','warn'); return; }
+
+  const novoItem = {
+    id: Date.now(), data, nf, destino: dest, fornecedor: forn,
+    registradoPor: document.getElementById('f-resp').value.trim() || '—',
+    categoria: catSel,
+    descOutros: catSel==='Outros' ? document.getElementById('f-out').value.trim() : '',
+    obs: document.getElementById('f-obs').value.trim(),
+    anexos: [...tempFiles],
+    situacao: '', origem: '', obsResposta: '', auxiliar: '',
+    criadoEm: new Date().toISOString(),
+  };
+  dados.push(novoItem);
+  persistItem(novoItem);
+  resetForm();
+  toast('✓ Divergência registrada!','ok');
+  renderDashboard();
+  updatePersonBadges();
+}
+
+function resetForm() {
+  ['f-nf','f-forn','f-resp','f-obs','f-out'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-dest').value='';
+  document.getElementById('f-data').value=today();
+  catSel='';
+  document.querySelectorAll('#cat-grid .tog').forEach(btn => btn.classList.remove('sel-blue'));
+  document.getElementById('row-out').style.display='none';
+  tempFiles=[]; renderPrev();
+}
+
+// ═══ PERSON PAGE ═══════════════════════════════════════
+function getItems(name) {
+  if (COMPRADORES.includes(name)) return dados.filter(d => d.destino===name);
+  return dados.filter(d => d.destino===name || d.auxiliar===name);
+}
+
+function renderPersonPage(name) {
+  const isComp  = COMPRADORES.includes(name);
+  const bgColor = isComp ? '#dbeafe' : '#f3e8ff';
+  const icon    = isComp ? '👔' : '🤝';
+  const role    = isComp ? 'Comprador' : 'Auxiliar';
+  const items   = getItems(name);
+
+  const tot   = items.length;
+  const pend  = items.filter(d => !d.situacao).length;
+  const verif = items.filter(d => d.situacao==='VERIFICANDO').length;
+  const real  = items.filter(d => d.situacao==='REALIZADO').length;
+  const withAux = isComp ? items.filter(d => d.auxiliar).length : 0;
+
+  document.getElementById('pessoa-content').innerHTML = `
+    <div class="person-hdr">
+      <div class="person-avatar" style="background:${bgColor}">${icon}</div>
+      <div>
+        <div style="font-size:1.15rem;font-weight:800">${name}</div>
+        <div style="font-size:.77rem;color:#aaa;font-weight:600">${role}</div>
+      </div>
+    </div>
+
+    <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));margin-bottom:16px;">
+      <div class="card c-total"><div class="lbl">Total</div><div class="val">${tot}</div></div>
+      <div class="card c-pend"><div class="lbl">Sem Resposta</div><div class="val">${pend}</div></div>
+      <div class="card c-verif"><div class="lbl">Verificando</div><div class="val">${verif}</div></div>
+      <div class="card c-real"><div class="lbl">Realizado</div><div class="val">${real}</div></div>
+      ${isComp?`<div class="card c-aux"><div class="lbl">Com Auxiliar</div><div class="val">${withAux}</div></div>`:''}
+    </div>
+
+    <div class="filters" style="margin-bottom:12px;">
+      <div class="fg"><label>Situação</label>
+        <select id="ps-sit" onchange="renderPsTable('${name}')">
+          <option value="">Todas</option>
+          <option value="NONE">Sem resposta</option>
+          <option value="VERIFICANDO">Verificando</option>
+          <option value="REALIZADO">Realizado</option>
+        </select>
+      </div>
+      <div class="fg"><label>Mês</label><input type="month" id="ps-mes" onchange="renderPsTable('${name}')"></div>
+    </div>
+
+    <div class="tbl-wrap">
+      <div class="tbl-head">
+        <h3>Divergências de ${name.split(' ')[0]}</h3>
+        <span id="ps-cnt" style="font-size:.8rem;color:#bbb;"></span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr>
+            <th>Data</th><th>NF</th><th>Fornecedor</th><th>Categoria</th>
+            <th>Origem</th><th>Situação</th>
+            ${isComp?'<th>Auxiliar</th>':''}
+            <th>Anexos</th><th>Ação</th>
+          </tr></thead>
+          <tbody id="ps-body"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  renderPsTable(name);
+}
+
+function renderPsTable(name) {
+  const isComp = COMPRADORES.includes(name);
+  const sit = document.getElementById('ps-sit')?.value || '';
+  const mes = document.getElementById('ps-mes')?.value || '';
+  let items = getItems(name);
+
+  if (sit === 'NONE') items = items.filter(d => !d.situacao);
+  else if (sit) items = items.filter(d => d.situacao === sit);
+  if (mes) items = items.filter(d => d.data.startsWith(mes));
+  items.sort((a,b) => b.data.localeCompare(a.data));
+
+  const cnt = document.getElementById('ps-cnt');
+  if (cnt) cnt.textContent = `${items.length} registro(s)`;
+
+  const tbody = document.getElementById('ps-body');
+  if (!tbody) return;
+
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="${isComp?9:8}" class="empty">Nenhuma divergência encontrada.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = items.map(d => {
+    const catLbl  = d.categoria==='Outros'&&d.descOutros ? `Outros: ${d.descOutros}` : d.categoria;
+    const origBdg = d.origem ? `<span class="badge b-${d.origem.toLowerCase()}">${d.origem}</span>` : '<span style="color:#ccc;font-size:.75rem;">—</span>';
+    const sitKey  = (d.situacao||'pend').toLowerCase();
+    const sitLbl  = {verificando:'Verificando',realizado:'Realizado',pend:'Sem resposta'}[sitKey] || d.situacao;
+    const sitBdg  = `<span class="badge b-${sitKey==='pend'?'pend':sitKey}">${sitLbl}</span>`;
+    const auxCell = isComp ? `<td>${d.auxiliar?`<span class="badge b-aux">${d.auxiliar}</span>`:'<span style="color:#ccc;font-size:.75rem;">—</span>'}</td>` : '';
+    const nAnx   = (d.anexos||[]).length;
+    const anxBtn = nAnx > 0
+      ? `<button class="btn btn-ghost btn-sm" onclick="openAnexos(${d.id})">📎 ${nAnx}</button>`
+      : '<span style="color:#ccc;font-size:.74rem;">—</span>';
+
+    const done = d.situacao === 'REALIZADO';
+    return `<tr class="${done?'tr-done':''}">
+      <td>${fmtDate(d.data)}</td>
+      <td><strong>${d.nf}</strong></td>
+      <td style="font-size:.82rem;">${d.fornecedor}</td>
+      <td style="font-size:.79rem;max-width:140px;">${catLbl}</td>
+      <td>${origBdg}</td>
+      <td>${sitBdg}</td>
+      ${auxCell}
+      <td>${anxBtn}</td>
+      <td><button class="btn ${done?'btn-ghost':'btn-primary'} btn-sm" onclick="openResp(${d.id},'${name}')">${done?'Ver':'Responder'}</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══ RESPONSE MODAL ════════════════════════════════════
+function openResp(id, personName) {
+  const d = dados.find(x => x.id===id);
+  if (!d) return;
+  editingId = id;
+  const isComp = COMPRADORES.includes(personName);
+  const catLbl = d.categoria==='Outros'&&d.descOutros ? `Outros: ${d.descOutros}` : d.categoria;
+
+  document.getElementById('rm-title').textContent = `NF ${d.nf} — ${d.fornecedor}`;
+  document.getElementById('rm-meta').textContent  = `${fmtDate(d.data)} · ${catLbl} · Registrado por: ${d.registradoPor}`;
+
+  const nAnx = (d.anexos||[]).length;
+  document.getElementById('rm-info').innerHTML = `
+    <div class="info-item"><div class="ik">Fornecedor</div><div class="iv">${d.fornecedor}</div></div>
+    <div class="info-item"><div class="ik">Categoria</div><div class="iv">${catLbl}</div></div>
+    ${d.obs?`<div class="info-item" style="grid-column:1/-1"><div class="ik">Observação</div><div class="iv">${d.obs}</div></div>`:''}
+    ${nAnx?`<div class="info-item" style="grid-column:1/-1"><div class="ik">Anexos</div><div class="iv"><button class="btn btn-ghost btn-sm" onclick="openAnexos(${d.id})">📎 Ver ${nAnx} anexo${nAnx>1?'s':''}</button></div></div>`:''}
+  `;
+
+  rmSit  = d.situacao || '';
+  rmOrig = d.origem   || '';
+
+  document.getElementById('rm-fields').innerHTML = `
+    <div class="mfg">
+      <label>Situação<span class="req">*</span></label>
+      <div class="tog-group">
+        <button type="button" class="tog ${rmSit==='VERIFICANDO'?'sel-blue':''}"  id="rm-v" onclick="setRmSit('VERIFICANDO')">🔍 Verificando</button>
+        <button type="button" class="tog ${rmSit==='REALIZADO'?'sel-green':''}"   id="rm-r" onclick="setRmSit('REALIZADO')">✅ Realizado</button>
+      </div>
+    </div>
+    ${isComp?`
+    <div class="mfg" id="rm-orig-wrap">
+      <label>Origem do Erro <span id="rm-orig-hint" style="font-size:.71rem;font-weight:400;color:#aaa;">(obrigatório ao Realizar)</span></label>
+      <div class="tog-group">
+        <button type="button" class="tog ${rmOrig==='EXTERNO'?'sel-red':''}"   id="rm-ext" onclick="setRmOrig('EXTERNO')">🏭 Externo</button>
+        <button type="button" class="tog ${rmOrig==='INTERNO'?'sel-amber':''}" id="rm-int" onclick="setRmOrig('INTERNO')">🏢 Interno</button>
+      </div>
+    </div>`:''}
+    <div class="mfg">
+      <label>Observação</label>
+      <textarea id="rm-obs" placeholder="Comentário sobre a resolução...">${d.obsResposta||''}</textarea>
+    </div>
+  `;
+
+  document.getElementById('rm-save').onclick = () => saveResp(personName);
+
+  if (isComp) {
+    const opts = AUXILIARES.map(a=>`<option value="${a}"${d.auxiliar===a?' selected':''}>${a}</option>`).join('');
+    auxOrig = '';
+    document.getElementById('rm-aux').innerHTML = `
+      <hr class="divider">
+      <div style="font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#a855f7;margin-bottom:10px;">Replicar para Auxiliar</div>
+      <div class="mfg">
+        <label>Auxiliar</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="rm-aux-sel" style="max-width:180px;">
+            <option value="">Selecione...</option>${opts}
+          </select>
+          ${d.auxiliar?`<span class="badge b-aux">Com ${d.auxiliar}</span>`:''}
+        </div>
+      </div>
+      <div class="mfg">
+        <label>Origem do Erro <span style="font-size:.71rem;font-weight:400;color:#aaa;">(opcional)</span></label>
+        <div class="tog-group">
+          <button type="button" class="tog" id="aux-ext" onclick="setAuxOrig('EXTERNO')">🏭 Externo</button>
+          <button type="button" class="tog" id="aux-int" onclick="setAuxOrig('INTERNO')">🏢 Interno</button>
+        </div>
+      </div>
+      <button class="btn btn-purple btn-sm" onclick="passToAux('${personName}')">Replicar para Auxiliar</button>
+    `;
+  } else {
+    document.getElementById('rm-aux').innerHTML = '';
+  }
+
+  document.getElementById('resp-bg').classList.add('open');
+}
+
+function setRmSit(v) {
+  rmSit = v;
+  document.getElementById('rm-v').classList.toggle('sel-blue',  v==='VERIFICANDO');
+  document.getElementById('rm-r').classList.toggle('sel-green', v==='REALIZADO');
+  // Destaca hint de Origem quando Realizado
+  const hint = document.getElementById('rm-orig-hint');
+  const wrap = document.getElementById('rm-orig-wrap');
+  if (hint) {
+    hint.textContent = v==='REALIZADO' ? '(obrigatório)' : '(obrigatório ao Realizar)';
+    hint.style.color = v==='REALIZADO' ? '#ef4444' : '#aaa';
+  }
+  if (wrap) wrap.style.opacity = v==='VERIFICANDO' ? '.6' : '1';
+}
+function setRmOrig(v) {
+  rmOrig = v;
+  const ext = document.getElementById('rm-ext');
+  const int = document.getElementById('rm-int');
+  if (ext) ext.classList.toggle('sel-red',   v==='EXTERNO');
+  if (int) int.classList.toggle('sel-amber', v==='INTERNO');
+}
+
+function saveResp(personName) {
+  const isComp = COMPRADORES.includes(personName);
+  if (!rmSit)  { toast('Selecione a Situação.','warn'); return; }
+  if (isComp && rmSit==='REALIZADO' && !rmOrig) { toast('Selecione a Origem do Erro para marcar como Realizado.','warn'); return; }
+  const d = dados.find(x=>x.id===editingId);
+  if (!d) return;
+  d.situacao    = rmSit;
+  if (isComp) d.origem = rmOrig;
+  d.obsResposta = document.getElementById('rm-obs').value.trim();
+  d.atualizadoEm = new Date().toISOString();
+  persistItem(d);
+  closeResp(null,true);
+  toast('✓ Resposta salva!','ok');
+  renderPersonPage(personName);
+  renderDashboard();
+  updatePersonBadges();
+}
+
+function setAuxOrig(v) {
+  auxOrig = v;
+  document.getElementById('aux-ext').classList.toggle('sel-red',   v==='EXTERNO');
+  document.getElementById('aux-int').classList.toggle('sel-amber', v==='INTERNO');
+}
+
+function passToAux(personName) {
+  const aux = document.getElementById('rm-aux-sel').value;
+  if (!aux) { toast('Selecione um auxiliar.','warn'); return; }
+  const d = dados.find(x=>x.id===editingId);
+  if (!d) return;
+  d.auxiliar = aux;
+  if (auxOrig) d.origem = auxOrig;
+  d.atualizadoEm = new Date().toISOString();
+  persistItem(d);
+  toast(`✓ Replicado para ${aux}!`,'ok');
+  closeResp(null,true);
+  renderPersonPage(personName);
+  updatePersonBadges();
+}
+
+function closeResp(e,force) {
+  if (force||(e&&e.target===document.getElementById('resp-bg'))) {
+    document.getElementById('resp-bg').classList.remove('open');
+    editingId=null; rmSit=''; rmOrig='';
+  }
+}
+
+// ═══ ANEXOS MODAL ══════════════════════════════════════
+function openAnexos(id) {
+  const d = dados.find(x => x.id === id);
+  if (!d) return;
+  const anexos = d.anexos || [];
+
+  document.getElementById('anx-title').textContent = `Anexos — NF ${d.nf}`;
+  document.getElementById('anx-meta').textContent  = `${d.fornecedor} · ${fmtDate(d.data)} · ${anexos.length} arquivo(s)`;
+
+  const imgs  = anexos.filter(a => a.type && a.type.startsWith('image/'));
+  const files = anexos.filter(a => !a.type || !a.type.startsWith('image/'));
+
+  let html = '';
+
+  if (imgs.length) {
+    html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:${files.length?'14px':'0'};">`;
+    imgs.forEach((a, i) => {
+      html += `<div onclick="zoomImg(${id},${i})" style="cursor:zoom-in;border-radius:8px;overflow:hidden;border:1.5px solid #e2e6ea;background:#f8f9fa;">
+        <img src="${a.dataUrl}" alt="${esc(a.name)}" style="width:100%;height:150px;object-fit:cover;display:block;transition:opacity .15s;" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+        <div style="padding:5px 8px;font-size:.72rem;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.name)}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  if (files.length) {
+    html += files.map(a => `
+      <div style="display:flex;align-items:center;gap:10px;background:#f8f9fa;border-radius:8px;padding:10px 14px;margin-bottom:7px;">
+        <span style="font-size:1.3rem;">📄</span>
+        <span style="font-size:.86rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.name)}</span>
+        <a href="${a.dataUrl}" download="${esc(a.name)}" class="btn btn-primary btn-sm" style="text-decoration:none;">⬇ Baixar</a>
+      </div>`).join('');
+  }
+
+  if (!anexos.length) html = `<p style="color:#ccc;text-align:center;padding:30px;font-style:italic;">Nenhum anexo.</p>`;
+
+  document.getElementById('anx-body').innerHTML = html;
+  document.getElementById('anx-bg').classList.add('open');
+}
+
+function zoomImg(id, idx) {
+  const d = dados.find(x => x.id === id);
+  if (!d) return;
+  const imgs = (d.anexos||[]).filter(a => a.type && a.type.startsWith('image/'));
+  const a = imgs[idx];
+  if (!a) return;
+  document.getElementById('im-img').src = a.dataUrl;
+  document.getElementById('im-name').textContent = a.name;
+  document.getElementById('img-bg').classList.add('open');
+}
+
+function closeAnx(e, force) {
+  if (force||(e&&e.target===document.getElementById('anx-bg')))
+    document.getElementById('anx-bg').classList.remove('open');
+}
+
+function closeImg(e, force) {
+  if (force||(e&&e.target===document.getElementById('img-bg')))
+    document.getElementById('img-bg').classList.remove('open');
+}
+
+// ═══ HISTÓRICO ═════════════════════════════════════════
+function clearHF() {
+  ['h-dest','h-cat','h-orig','h-sit'].forEach(id=>document.getElementById(id).value='');
+  ['h-mes','h-busca'].forEach(id=>document.getElementById(id).value='');
+  renderHistorico();
+}
+
+function getHistData() {
+  const dest  = document.getElementById('h-dest').value;
+  const cat   = document.getElementById('h-cat').value;
+  const orig  = document.getElementById('h-orig').value;
+  const sit   = document.getElementById('h-sit').value;
+  const mes   = document.getElementById('h-mes').value;
+  const busca = document.getElementById('h-busca').value.toLowerCase();
+  return dados.filter(d=>{
+    if (dest && d.destino!==dest && d.auxiliar!==dest) return false;
+    if (cat  && d.categoria!==cat) return false;
+    if (orig && d.origem!==orig) return false;
+    if (sit==='NONE' && d.situacao) return false;
+    if (sit && sit!=='NONE' && d.situacao!==sit) return false;
+    if (mes  && !d.data.startsWith(mes)) return false;
+    if (busca && !d.nf.includes(busca) && !d.fornecedor.toLowerCase().includes(busca)) return false;
+    return true;
+  }).sort((a,b)=>{
+    const chkA = a.conferido ? 1 : 0;
+    const chkB = b.conferido ? 1 : 0;
+    if (chkA !== chkB) return chkA - chkB;
+    return b.data.localeCompare(a.data);
+  });
+}
+
+function toggleHistChk(id, checked) {
+  const d = dados.find(x => x.id === id);
+  if (!d) return;
+  d.conferido = checked;
+  d.atualizadoEm = new Date().toISOString();
+  persistItem(d);
+  renderHistorico();
+  renderDashboard();
+  updatePersonBadges();
+}
+
+function renderHistorico() {
+  const list = getHistData();
+  document.getElementById('h-cnt').textContent=`${list.length} registro(s)`;
+  const tbody=document.getElementById('h-body');
+  if (!list.length){tbody.innerHTML=`<tr><td colspan="10" class="empty">Nenhum registro.</td></tr>`;return;}
+  tbody.innerHTML=list.map(d=>{
+    const catLbl=d.categoria==='Outros'&&d.descOutros?`Outros: ${d.descOutros}`:d.categoria;
+    const origBdg=d.origem?`<span class="badge b-${d.origem.toLowerCase()}">${d.origem}</span>`:'—';
+    const sitKey=(d.situacao||'pend').toLowerCase();
+    const sitLbl={verificando:'Verificando',realizado:'Realizado',pend:'Sem resposta'}[sitKey]||d.situacao;
+    const isDone = d.situacao === 'REALIZADO';
+    const isConf = !!d.conferido;
+    return`<tr class="${isDone?'tr-done':''}">
+      <td>${fmtDate(d.data)}</td><td>${d.nf}</td><td>${d.destino}</td><td>${d.fornecedor}</td>
+      <td style="font-size:.79rem;">${catLbl}</td><td>${origBdg}</td>
+      <td><span class="badge b-${sitKey==='pend'?'pend':sitKey}">${sitLbl}</span></td>
+      <td>${d.auxiliar||'—'}</td><td>${d.registradoPor}</td>
+      <td style="text-align:center;"><input type="checkbox" class="hist-chk" ${isConf?'checked':''} onchange="toggleHistChk(${d.id},this.checked)" title="${isConf?'Desmarcar':'Marcar como conferido'}"></td>
+    </tr>`;
+  }).join('');
+}
+
+function exportCSV() {
+  const list=getHistData();
+  if (!list.length){toast('Nenhum dado para exportar.','warn');return;}
+  const hdr=['Data','NF','Destino','Fornecedor','Categoria','Desc.Outros','Origem','Situação','Auxiliar','Registrado por','Obs'];
+  const rows=list.map(d=>[d.data,d.nf,d.destino,d.fornecedor,d.categoria,d.descOutros||'',d.origem||'',d.situacao||'',d.auxiliar||'',d.registradoPor,`"${(d.obs||'').replace(/"/g,'""')}"`].join(';'));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+[hdr.join(';'),...rows].join('\n')],{type:'text/csv;charset=utf-8;'}));
+  a.download=`divergencias_${today()}.csv`;
+  a.click();
+}
+
+// ═══ DASHBOARD ═════════════════════════════════════════
+let charts={};
+function destroyChart(k){if(charts[k]){charts[k].destroy();delete charts[k];}}
+
+function clearDF(){
+  ['d-ini','d-fim'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('d-comp').value='';
+  renderDashboard();
+}
+
+function getDashData(){
+  const ini=document.getElementById('d-ini').value;
+  const fim=document.getElementById('d-fim').value;
+  const comp=document.getElementById('d-comp').value;
+  return dados.filter(d=>{
+    const m=d.data.slice(0,7);
+    if(ini&&m<ini)return false;
+    if(fim&&m>fim)return false;
+    if(comp&&d.destino!==comp)return false;
+    return true;
+  });
+}
+
+const CHART_DEFAULTS = {
+  font: { family: "'Segoe UI', sans-serif", size: 12 },
+  gridColor: 'rgba(0,0,0,.05)',
+  tickColor: '#aaa',
+};
+Chart.defaults.font.family = CHART_DEFAULTS.font.family;
+
+function renderDashboard(){
+  const d=getDashData();
+  document.getElementById('dc-tot').textContent=d.length;
+  document.getElementById('dc-pend').textContent=d.filter(x=>!x.situacao).length;
+  document.getElementById('dc-ver').textContent=d.filter(x=>x.situacao==='VERIFICANDO').length;
+  document.getElementById('dc-real').textContent=d.filter(x=>x.situacao==='REALIZADO').length;
+  document.getElementById('dc-ext').textContent=d.filter(x=>x.origem==='EXTERNO').length;
+  document.getElementById('dc-int').textContent=d.filter(x=>x.origem==='INTERNO').length;
+  const ts=document.getElementById('dash-ts');
+  if(ts) ts.textContent='Atualizado: '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+  const axisStyle={grid:{color:'rgba(0,0,0,.05)'},ticks:{color:'#aaa',font:{size:11}},border:{display:false}};
+
+  // Categoria
+  destroyChart('cat');
+  charts['cat']=new Chart(document.getElementById('ch-cat'),{
+    type:'bar',
+    data:{labels:['Sem OC','Preço div.','Prod. errado','Outros'],
+      datasets:[{data:CATS.map(c=>d.filter(x=>x.categoria===c).length),
+        backgroundColor:['#818cf8','#f87171','#fbbf24','#34d399'],
+        borderRadius:8,borderSkipped:false}]},
+    options:{
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`  ${ctx.parsed.y} ocorrência(s)`}}},
+      scales:{x:{...axisStyle},y:{...axisStyle,beginAtZero:true,ticks:{...axisStyle.ticks,precision:0}}}
+    }
+  });
+
+  // Origem
+  destroyChart('orig');
+  const extN=d.filter(x=>x.origem==='EXTERNO').length;
+  const intN=d.filter(x=>x.origem==='INTERNO').length;
+  const semN=d.filter(x=>!x.origem).length;
+  charts['orig']=new Chart(document.getElementById('ch-orig'),{
+    type:'doughnut',
+    data:{labels:['Externo','Interno','Sem classificação'],
+      datasets:[{data:[extN,intN,semN],
+        backgroundColor:['#f87171','#fbbf24','#e5e7eb'],borderWidth:3,borderColor:'white',hoverOffset:6}]},
+    options:{plugins:{legend:{position:'bottom',labels:{padding:16,font:{size:12},usePointStyle:true}}},cutout:'65%'}
+  });
+
+  const legendStyle={position:'bottom',labels:{padding:18,font:{size:12},usePointStyle:true,boxWidth:10}};
+
+  // Por comprador
+  destroyChart('comp');
+  charts['comp']=new Chart(document.getElementById('ch-comp'),{
+    type:'bar',
+    data:{
+      labels:COMPRADORES,
+      datasets:[
+        {label:'Sem OC',       data:COMPRADORES.map(b=>d.filter(x=>x.destino===b&&x.categoria===CATS[0]).length),backgroundColor:'#818cf8',borderRadius:6,borderSkipped:false},
+        {label:'Preço div.',   data:COMPRADORES.map(b=>d.filter(x=>x.destino===b&&x.categoria===CATS[1]).length),backgroundColor:'#f87171',borderRadius:6,borderSkipped:false},
+        {label:'Prod. errado', data:COMPRADORES.map(b=>d.filter(x=>x.destino===b&&x.categoria===CATS[2]).length),backgroundColor:'#fbbf24',borderRadius:6,borderSkipped:false},
+        {label:'Outros',       data:COMPRADORES.map(b=>d.filter(x=>x.destino===b&&x.categoria===CATS[3]).length),backgroundColor:'#34d399',borderRadius:6,borderSkipped:false},
+      ]
+    },
+    options:{plugins:{legend:legendStyle},scales:{x:{...axisStyle},y:{...axisStyle,beginAtZero:true,ticks:{...axisStyle.ticks,precision:0}}}}
+  });
+
+  // Mensal
+  destroyChart('mes');
+  const meses={};
+  d.forEach(x=>{const m=x.data.slice(0,7);if(!meses[m])meses[m]={ext:0,int:0,sem:0};
+    if(x.origem==='EXTERNO')meses[m].ext++;else if(x.origem==='INTERNO')meses[m].int++;else meses[m].sem++;});
+  const ml=Object.keys(meses).sort();
+  charts['mes']=new Chart(document.getElementById('ch-mes'),{
+    type:'bar',
+    data:{labels:ml.map(fmtMonth),
+      datasets:[
+        {label:'Externo',          data:ml.map(m=>meses[m].ext),backgroundColor:'#f87171',borderRadius:6,borderSkipped:false},
+        {label:'Interno',          data:ml.map(m=>meses[m].int),backgroundColor:'#fbbf24',borderRadius:6,borderSkipped:false},
+        {label:'Sem classificação',data:ml.map(m=>meses[m].sem),backgroundColor:'#e5e7eb',borderRadius:6,borderSkipped:false},
+      ]},
+    options:{plugins:{legend:legendStyle},scales:{x:{...axisStyle},y:{...axisStyle,beginAtZero:true,ticks:{...axisStyle.ticks,precision:0}}}}
+  });
+
+  // Fornecedores
+  destroyChart('forn');
+  const extD=d.filter(x=>x.origem==='EXTERNO');
+  const fcts={};extD.forEach(x=>{fcts[x.fornecedor]=(fcts[x.fornecedor]||0)+1;});
+  const sorted=Object.entries(fcts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const noForn=document.getElementById('no-forn');
+  const chForn=document.getElementById('ch-forn');
+  if(!sorted.length){chForn.style.display='none';noForn.style.display='block';}
+  else{
+    chForn.style.display='';noForn.style.display='none';
+    const fornColors=sorted.map((_,i)=>`hsl(${220+i*12},75%,${60-i*2}%)`);
+    charts['forn']=new Chart(chForn,{
+      type:'bar',
+      data:{
+        labels:sorted.map(([k])=>k),
+        datasets:[{data:sorted.map(([,v])=>v),backgroundColor:fornColors,borderRadius:8,borderSkipped:false}]
+      },
+      options:{
+        indexAxis:'y',
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`  ${ctx.parsed.x} erro(s) externos`}}},
+        scales:{x:{...axisStyle,beginAtZero:true,ticks:{...axisStyle.ticks,precision:0}},y:{...axisStyle}}
+      }
+    });
+  }
+}
+
+// ═══ UTILS ═════════════════════════════════════════════
+function fmtDate(s){const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;}
+function fmtMonth(s){const[y,m]=s.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][+m-1]+'/'+y.slice(2);}
+function esc(s){return(s||'').replace(/'/g,"\\'").replace(/</g,'&lt;');}
+function toast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className=type+' show';
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ═══ PASTE SUPPORT ═════════════════════════════════════
+document.addEventListener('paste', function(e) {
+  // Só processa se estiver na página de registro
+  if (!document.getElementById('page-registro').classList.contains('active')) return;
+  const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+  if (!items) return;
+  let found = false;
+  Array.from(items).forEach(item => {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (!file) return;
+      found = true;
+      const r = new FileReader();
+      const name = `print_${Date.now()}.png`;
+      r.onload = ev => {
+        tempFiles.push({ name, dataUrl: ev.target.result, type: item.type });
+        renderPrev();
+        // Feedback visual na área de upload
+        const area = document.getElementById('upload-area');
+        if (area) {
+          area.style.borderColor = '#10b981';
+          area.style.background  = '#f0fdf4';
+          setTimeout(() => { area.style.borderColor=''; area.style.background=''; }, 1200);
+        }
+      };
+      r.readAsDataURL(file);
+    }
+  });
+  if (found) toast('✓ Print colado!','ok');
+});
+
+// ═══ PERSON BADGES ═════════════════════════════════════
+function updatePersonBadges() {
+  [...COMPRADORES, ...AUXILIARES].forEach(name => {
+    const btn = document.querySelector(`.ps-btn[data-name="${name}"]`);
+    if (!btn) return;
+    const pending = getItems(name).filter(d => d.situacao !== 'REALIZADO').length;
+    let badge = btn.querySelector('.ps-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'ps-badge';
+      btn.appendChild(badge);
+    }
+    badge.textContent = pending;
+    badge.style.display = pending > 0 ? 'flex' : 'none';
+  });
+}
+
+// ═══ CLOCK ═════════════════════════════════════════════
+function tickClock() {
+  const el = document.getElementById('hdr-clock');
+  if (el) el.textContent = new Date().toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+tickClock();
+setInterval(tickClock, 30000);
+
+// ═══ INIT ══════════════════════════════════════════════
+// Carrega dados locais primeiro (renderização imediata)
+if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
+renderAllDynamic();
+renderDashboard();
+// Depois sincroniza com Supabase (se configurado)
+loadFromSupabase();
+</script>
+</body>
+</html>
