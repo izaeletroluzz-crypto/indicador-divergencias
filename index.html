@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Indicador de Divergências — Compras</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1a2e}
@@ -495,15 +494,15 @@ textarea{resize:vertical;min-height:66px}
 <div id="toast"></div>
 
 <script>
-// ═══ SUPABASE ══════════════════════════════════════════
-// ⚙️ PREENCHA COM SUAS CREDENCIAIS DO SUPABASE:
-const SUPABASE_URL  = '';   // ex: https://xyzxyz.supabase.co
-const SUPABASE_KEY  = '';   // ex: eyJhbGci... (anon/public key)
+// ═══ GITHUB API ════════════════════════════════════════
+// ⚙️ PREENCHA COM SEU TOKEN DO GITHUB:
+const GH_TOKEN  = atob('Z2hwX1BteVFrRWE0eEI1MmlsVlVkQTJmOG9mZDFXWWc5YTJIbU9QbA==');
+const GH_OWNER  = 'izaeletroluzz-crypto';
+const GH_REPO   = 'indicador-divergencias';
+const GH_BRANCH = 'main';
 
-let sb = null;
-if (SUPABASE_URL && SUPABASE_KEY) {
-  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-}
+let dadosSHA  = null;
+let configSHA = null;
 
 function setDbStatus(state) {
   const dot = document.getElementById('db-dot');
@@ -520,6 +519,30 @@ function setDbStatus(state) {
   lbl.textContent = s.text;
 }
 
+async function ghGet(path) {
+  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`, {
+    headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+  });
+  if (res.status === 404) return null;
+  return await res.json();
+}
+
+async function ghPut(path, content, sha) {
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2))));
+  const body = { message: `update ${path}`, content: encoded, branch: GH_BRANCH };
+  if (sha) body.sha = sha;
+  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
+    method: 'PUT',
+    headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return await res.json();
+}
+
+function ghDecode(content) {
+  return JSON.parse(decodeURIComponent(escape(atob(content.replace(/\n/g, '')))));
+}
+
 // ═══ CONFIG ════════════════════════════════════════════
 let COMPRADORES = JSON.parse(localStorage.getItem('cfg_comp') || '["João Victor","Matheus","Tanabi"]');
 let AUXILIARES  = JSON.parse(localStorage.getItem('cfg_aux')  || '["Lucas","Felipe","Isadora"]');
@@ -529,12 +552,12 @@ async function persistConfig() {
   localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES));
   localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
   localStorage.setItem('cfg_cats', JSON.stringify(CATS));
-  if (!sb) return;
-  await sb.from('configuracoes').upsert([
-    { chave: 'compradores', valor: COMPRADORES },
-    { chave: 'auxiliares',  valor: AUXILIARES  },
-    { chave: 'categorias',  valor: CATS        },
-  ], { onConflict: 'chave' });
+  if (!GH_TOKEN) return;
+  try {
+    const cfg = { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS };
+    const result = await ghPut('config.json', cfg, configSHA);
+    if (result.content) configSHA = result.content.sha;
+  } catch(e) { console.error('persistConfig error:', e); }
 }
 
 const CAT_EMOJIS = {'Sem ordem de compra':'📄','Preço divergente':'💰','Produto errado':'📦','Outros':'✏️'};
@@ -554,71 +577,51 @@ function persist() {
 
 async function persistItem(d) {
   persist();
-  if (!sb) return;
+  if (!GH_TOKEN) return;
   setDbStatus('sync');
-  const row = {
-    id: d.id, data: d.data, nf: d.nf, destino: d.destino,
-    fornecedor: d.fornecedor, registrado_por: d.registradoPor || '',
-    categoria: d.categoria, desc_outros: d.descOutros || '',
-    obs: d.obs || '', anexos: d.anexos || [],
-    situacao: d.situacao || '', origem: d.origem || '',
-    obs_resposta: d.obsResposta || '', auxiliar: d.auxiliar || '',
-    conferido: d.conferido || false,
-    criado_em: d.criadoEm || null, atualizado_em: d.atualizadoEm || null
-  };
-  const { error } = await sb.from('divergencias').upsert([row], { onConflict: 'id' });
-  if (error) { setDbStatus('error'); console.error(error); }
-  else setDbStatus('ok');
+  try {
+    const result = await ghPut('dados.json', dados, dadosSHA);
+    if (result.content) dadosSHA = result.content.sha;
+    setDbStatus('ok');
+  } catch(e) { setDbStatus('error'); console.error('persistItem error:', e); }
 }
 
 async function deleteItem(id) {
   dados = dados.filter(x => x.id !== id);
-  persist();
-  if (!sb) return;
-  await sb.from('divergencias').delete().eq('id', id);
+  await persistItem({ id });
 }
 
-async function loadFromSupabase() {
-  if (!sb) { setDbStatus('offline'); return; }
+async function loadFromGitHub() {
+  if (!GH_TOKEN) { setDbStatus('offline'); return; }
   setDbStatus('sync');
   try {
     // Config
-    const { data: cfg } = await sb.from('configuracoes').select('*');
-    if (cfg && cfg.length) {
-      cfg.forEach(row => {
-        if (row.chave === 'compradores') COMPRADORES = row.valor;
-        if (row.chave === 'auxiliares')  AUXILIARES  = row.valor;
-        if (row.chave === 'categorias')  CATS        = row.valor;
-      });
+    const cfgFile = await ghGet('config.json');
+    if (cfgFile && cfgFile.content) {
+      configSHA = cfgFile.sha;
+      const cfg = ghDecode(cfgFile.content);
+      if (cfg.compradores) COMPRADORES = cfg.compradores;
+      if (cfg.auxiliares)  AUXILIARES  = cfg.auxiliares;
+      if (cfg.categorias)  CATS        = cfg.categorias;
       localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES));
       localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
       localStorage.setItem('cfg_cats', JSON.stringify(CATS));
     }
     // Dados
-    const { data: rows, error } = await sb.from('divergencias').select('*').order('id', { ascending: false });
-    if (error) throw error;
-    if (rows) {
-      dados = rows.map(r => ({
-        id: r.id, data: r.data, nf: r.nf, destino: r.destino,
-        fornecedor: r.fornecedor, registradoPor: r.registrado_por || '',
-        categoria: r.categoria, descOutros: r.desc_outros || '',
-        obs: r.obs || '', anexos: r.anexos || [],
-        situacao: r.situacao || '', origem: r.origem || '',
-        obsResposta: r.obs_resposta || '', auxiliar: r.auxiliar || '',
-        conferido: r.conferido || false,
-        criadoEm: r.criado_em, atualizadoEm: r.atualizado_em
-      }));
+    const dadosFile = await ghGet('dados.json');
+    if (dadosFile && dadosFile.content) {
+      dadosSHA = dadosFile.sha;
+      dados = ghDecode(dadosFile.content);
       persist();
     }
     setDbStatus('ok');
-    // Garante "Outros" sempre presente
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
     renderAllDynamic();
     renderDashboard();
   } catch(e) {
-    console.error('Supabase load error:', e);
+    console.error('GitHub load error:', e);
     setDbStatus('error');
-    toast('Erro ao conectar ao banco. Usando dados locais.','warn');
+    toast('Erro ao conectar ao GitHub. Usando dados locais.','warn');
   }
 }
 
@@ -1421,8 +1424,8 @@ setInterval(tickClock, 30000);
 if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
 renderAllDynamic();
 renderDashboard();
-// Depois sincroniza com Supabase (se configurado)
-loadFromSupabase();
+// Depois sincroniza com GitHub (se token configurado)
+loadFromGitHub();
 </script>
 </body>
 </html>
