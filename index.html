@@ -80,10 +80,6 @@ table{width:100%;border-collapse:collapse;font-size:.83rem}
 th{background:#f8f9fa;padding:9px 13px;text-align:left;font-size:.7rem;color:#888;text-transform:uppercase;letter-spacing:.4px;font-weight:800;white-space:nowrap}
 td{padding:9px 13px;border-top:1px solid #f4f5f7;vertical-align:middle}
 tr:hover td{background:#fafbff}
-tr.tr-done td{opacity:.42;background:#fafafa}
-tr.tr-done:hover td{opacity:.55;background:#f4f5f7}
-tr.tr-done td .badge:not(.b-realizado){filter:grayscale(1)}
-tr.tr-done td .b-realizado{opacity:1;filter:none}
 .empty{text-align:center;color:#ccc;padding:44px;font-style:italic;font-size:.88rem}
 
 /* FILTERS */
@@ -1027,7 +1023,6 @@ function openResp(id, personName) {
         <button type="button" class="tog ${rmSit==='REALIZADO'?'sel-green':''}"   id="rm-r" onclick="setRmSit('REALIZADO')">✅ Realizado</button>
       </div>
     </div>
-    ${isComp?`
     <div class="mfg" id="rm-orig-wrap">
       <label>Origem do Erro <span id="rm-orig-hint" style="font-size:.71rem;font-weight:400;color:#aaa;">(obrigatório ao Realizar)</span></label>
       <div class="tog-group">
@@ -1044,7 +1039,7 @@ function openResp(id, personName) {
         <label>Explicação breve</label>
         <input type="text" id="rm-explicacao" placeholder="O que aconteceu..." value="${d.explicacaoInterna||''}">
       </div>
-    </div>`:''}
+    </div>
     <div class="mfg">
       <label>Observação</label>
       <textarea id="rm-obs" placeholder="Comentário sobre a resolução...">${d.obsResposta||''}</textarea>
@@ -1054,8 +1049,7 @@ function openResp(id, personName) {
   document.getElementById('rm-save').onclick = () => saveResp(personName);
 
   if (isComp) {
-    const allPeople = [...new Set([...COMPRADORES, ...AUXILIARES])];
-    const opts = allPeople.map(a=>`<option value="${a}"${d.auxiliar===a?' selected':''}>${a}</option>`).join('');
+    const opts = AUXILIARES.map(a=>`<option value="${a}"${d.auxiliar===a?' selected':''}>${a}</option>`).join('');
     auxOrig = '';
     document.getElementById('rm-aux').innerHTML = `
       <hr class="divider">
@@ -1111,19 +1105,17 @@ function setRmOrig(v) {
 function saveResp(personName) {
   const isComp = COMPRADORES.includes(personName);
   if (!rmSit)  { toast('Selecione a Situação.','warn'); return; }
-  if (isComp && rmSit==='REALIZADO' && !rmOrig) { toast('Selecione a Origem do Erro para marcar como Realizado.','warn'); return; }
+  if (rmSit==='REALIZADO' && !rmOrig) { toast('Selecione a Origem do Erro para marcar como Realizado.','warn'); return; }
   const d = dados.find(x=>x.id===editingId);
   if (!d) return;
   d.situacao    = rmSit;
-  if (isComp) {
-    d.origem = rmOrig;
-    if (rmOrig === 'INTERNO') {
-      d.responsavelInterno = (document.getElementById('rm-responsavel')||{}).value?.trim() || d.responsavelInterno || '';
-      d.explicacaoInterna  = (document.getElementById('rm-explicacao')||{}).value?.trim()  || d.explicacaoInterna  || '';
-    } else {
-      d.responsavelInterno = '';
-      d.explicacaoInterna  = '';
-    }
+  d.origem = rmOrig;
+  if (rmOrig === 'INTERNO') {
+    d.responsavelInterno = (document.getElementById('rm-responsavel')||{}).value?.trim() || d.responsavelInterno || '';
+    d.explicacaoInterna  = (document.getElementById('rm-explicacao')||{}).value?.trim()  || d.explicacaoInterna  || '';
+  } else {
+    d.responsavelInterno = '';
+    d.explicacaoInterna  = '';
   }
   d.obsResposta = document.getElementById('rm-obs').value.trim();
   d.atualizadoEm = new Date().toISOString();
