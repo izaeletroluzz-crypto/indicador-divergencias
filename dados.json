@@ -17,7 +17,24 @@
     "criadoEm": "2026-06-26T20:17:17.300Z",
     "responsavelInterno": "",
     "explicacaoInterna": "",
-    "atualizadoEm": "2026-06-26T20:17:33.811Z",
-    "conferido": true
+    "atualizadoEm": "2026-06-26T20:17:34.619Z",
+    "conferido": false
+  },
+  {
+    "id": 1782505067259,
+    "data": "2026-06-26",
+    "nf": "3583785525",
+    "destino": "Tanabi",
+    "fornecedor": "pacsvgq32",
+    "registradoPor": "—",
+    "categoria": "Frete divergente",
+    "descOutros": "",
+    "obs": "",
+    "anexos": [],
+    "situacao": "",
+    "origem": "",
+    "obsResposta": "",
+    "auxiliar": "",
+    "criadoEm": "2026-06-26T20:17:47.259Z"
   }
 ]
