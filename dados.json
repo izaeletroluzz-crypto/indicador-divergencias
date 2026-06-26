@@ -1,1 +1,19 @@
-[]
+[
+  {
+    "id": 1782503346189,
+    "data": "2026-06-26",
+    "nf": "ssss",
+    "destino": "Tanabi",
+    "fornecedor": "Philips",
+    "registradoPor": "sss",
+    "categoria": "Sem ordem de compra",
+    "descOutros": "",
+    "obs": "",
+    "anexos": [],
+    "situacao": "",
+    "origem": "",
+    "obsResposta": "",
+    "auxiliar": "",
+    "criadoEm": "2026-06-26T19:49:06.189Z"
+  }
+]
