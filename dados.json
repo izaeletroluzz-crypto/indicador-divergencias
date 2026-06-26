@@ -31,11 +31,13 @@
     "descOutros": "",
     "obs": "",
     "anexos": [],
-    "situacao": "",
-    "origem": "",
+    "situacao": "VERIFICANDO",
+    "origem": "EXTERNO",
     "obsResposta": "",
     "auxiliar": "Felipe",
     "criadoEm": "2026-06-26T20:17:47.259Z",
-    "atualizadoEm": "2026-06-26T20:17:56.572Z"
+    "atualizadoEm": "2026-06-26T20:18:11.211Z",
+    "responsavelInterno": "",
+    "explicacaoInterna": ""
   }
 ]
