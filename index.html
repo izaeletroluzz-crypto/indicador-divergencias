@@ -72,6 +72,12 @@ header .hdr-sub{font-size:.74rem;opacity:.45;font-weight:400;margin-top:2px}
 .chart-box canvas{max-height:215px}
 .chart-full{grid-column:1/-1}
 
+/* DONE ROWS — only on person pages */
+#page-pessoa tr.tr-done td{opacity:.42;background:#fafafa}
+#page-pessoa tr.tr-done:hover td{opacity:.55;background:#f4f5f7}
+#page-pessoa tr.tr-done td .badge:not(.b-realizado){filter:grayscale(1)}
+#page-pessoa tr.tr-done td .b-realizado{opacity:1;filter:none}
+
 /* TABLE */
 .tbl-wrap{background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
 .tbl-head{display:flex;justify-content:space-between;align-items:center;padding:13px 18px;border-bottom:1px solid #f0f2f5;flex-wrap:wrap;gap:8px}
@@ -653,6 +659,7 @@ async function loadFromGitHub() {
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
     renderAllDynamic();
     renderDashboard();
+    updatePersonBadges();
   } catch(e) {
     console.error('GitHub load error:', e);
     if (e.message === 'TOKEN_INVALIDO') {
@@ -1489,9 +1496,9 @@ document.addEventListener('paste', function(e) {
 
 // ═══ PERSON BADGES ═════════════════════════════════════
 function updatePersonBadges() {
-  [...COMPRADORES, ...AUXILIARES].forEach(name => {
-    const btn = document.querySelector(`.ps-btn[data-name="${name}"]`);
-    if (!btn) return;
+  document.querySelectorAll('.ps-btn').forEach(btn => {
+    const name = btn.dataset.name;
+    if (!name) return;
     const pending = getItems(name).filter(d => d.situacao !== 'REALIZADO').length;
     let badge = btn.querySelector('.ps-badge');
     if (!badge) {
