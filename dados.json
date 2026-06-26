@@ -10,11 +10,13 @@
     "descOutros": "",
     "obs": "",
     "anexos": [],
-    "situacao": "",
-    "origem": "",
+    "situacao": "REALIZADO",
+    "origem": "INTERNO",
     "obsResposta": "",
     "auxiliar": "Felipe",
     "criadoEm": "2026-06-26T19:49:06.189Z",
-    "atualizadoEm": "2026-06-26T19:49:20.581Z"
+    "atualizadoEm": "2026-06-26T19:52:09.358Z",
+    "responsavelInterno": "Iza",
+    "explicacaoInterna": "Conferencia"
   }
 ]
