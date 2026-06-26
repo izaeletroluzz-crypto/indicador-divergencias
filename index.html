@@ -452,6 +452,16 @@ textarea{resize:vertical;min-height:66px}
     <div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:13px 16px;font-size:.82rem;color:#92400e;">
       ⚠️ Remover um comprador/auxiliar não apaga os registros já vinculados a ele — apenas remove a opção para novos registros.
     </div>
+
+    <!-- Conexão GitHub -->
+    <div class="form-card" style="margin-top:16px;">
+      <div style="font-size:.95rem;font-weight:800;margin-bottom:10px;">🔑 Conexão GitHub</div>
+      <p style="font-size:.82rem;color:#666;margin-bottom:12px;">O token é salvo apenas neste navegador. Cada usuário precisa configurar o seu.</p>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="cfg-token-status" style="font-size:.82rem;color:#666;flex:1;"></span>
+        <button class="btn btn-primary" onclick="showTokenModal()">🔑 Alterar Token</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -493,16 +503,44 @@ textarea{resize:vertical;min-height:66px}
 
 <div id="toast"></div>
 
+<!-- MODAL TOKEN -->
+<div id="token-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:14px;padding:28px;max-width:420px;width:93%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="font-size:1.5rem;margin-bottom:6px;">🔑</div>
+    <h3 style="font-size:1rem;font-weight:800;margin-bottom:6px;">Configurar acesso ao banco</h3>
+    <p style="font-size:.83rem;color:#666;margin-bottom:16px;line-height:1.5;">Cole o seu <strong>GitHub Personal Access Token</strong> para conectar ao banco de dados. Ele fica salvo só neste navegador.</p>
+    <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+      style="width:100%;padding:10px 12px;border:1.5px solid #e2e6ea;border-radius:8px;font-size:.85rem;margin-bottom:12px;outline:none;"
+      onkeydown="if(event.key==='Enter')saveToken()">
+    <div style="display:flex;gap:8px;">
+      <button onclick="saveToken()" style="flex:1;background:#3b82f6;color:white;border:none;padding:10px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.88rem;">Conectar</button>
+      <button onclick="document.getElementById('token-modal').style.display='none'" style="background:#f0f2f5;color:#555;border:none;padding:10px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:.88rem;">Cancelar</button>
+    </div>
+    <p style="font-size:.74rem;color:#bbb;margin-top:12px;">O token não é armazenado no código — apenas no seu navegador.</p>
+  </div>
+</div>
+
 <script>
 // ═══ GITHUB API ════════════════════════════════════════
-// ⚙️ PREENCHA COM SEU TOKEN DO GITHUB:
-const GH_TOKEN  = atob('Z2hwX1BteVFrRWE0eEI1MmlsVlVkQTJmOG9mZDFXWWc5YTJIbU9QbA==');
 const GH_OWNER  = 'izaeletroluzz-crypto';
 const GH_REPO   = 'indicador-divergencias';
 const GH_BRANCH = 'main';
 
+let GH_TOKEN  = localStorage.getItem('gh_token') || '';
 let dadosSHA  = null;
 let configSHA = null;
+
+function showTokenModal() {
+  document.getElementById('token-modal').style.display = 'flex';
+}
+function saveToken() {
+  const t = document.getElementById('token-input').value.trim();
+  if (!t) return;
+  localStorage.setItem('gh_token', t);
+  GH_TOKEN = t;
+  document.getElementById('token-modal').style.display = 'none';
+  loadFromGitHub();
+}
 
 function setDbStatus(state) {
   const dot = document.getElementById('db-dot');
@@ -524,6 +562,7 @@ async function ghGet(path) {
     headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
   });
   if (res.status === 404) return null;
+  if (res.status === 401) throw new Error('TOKEN_INVALIDO');
   return await res.json();
 }
 
@@ -592,7 +631,7 @@ async function deleteItem(id) {
 }
 
 async function loadFromGitHub() {
-  if (!GH_TOKEN) { setDbStatus('offline'); return; }
+  if (!GH_TOKEN) { setDbStatus('offline'); showTokenModal(); return; }
   setDbStatus('sync');
   try {
     // Config
@@ -620,8 +659,16 @@ async function loadFromGitHub() {
     renderDashboard();
   } catch(e) {
     console.error('GitHub load error:', e);
-    setDbStatus('error');
-    toast('Erro ao conectar ao GitHub. Usando dados locais.','warn');
+    if (e.message === 'TOKEN_INVALIDO') {
+      setDbStatus('error');
+      localStorage.removeItem('gh_token');
+      GH_TOKEN = '';
+      toast('Token inválido ou expirado. Configure novamente.','warn');
+      setTimeout(showTokenModal, 1200);
+    } else {
+      setDbStatus('error');
+      toast('Erro ao conectar ao GitHub. Usando dados locais.','warn');
+    }
   }
 }
 
@@ -670,8 +717,12 @@ function renderCatGrid() {
   const grid = document.getElementById('cat-grid');
   if (!grid) return;
   grid.innerHTML = CATS.map(c =>
-    `<button type="button" class="tog" data-cat="${c}" onclick="selCat('${c.replace(/'/g,"\\'")}'">${catEmoji(c)} ${c}</button>`
+    `<button type="button" class="tog" data-cat="${c.replace(/"/g,'&quot;')}">${catEmoji(c)} ${c}</button>`
   ).join('');
+  grid.onclick = function(e) {
+    const btn = e.target.closest('.tog');
+    if (btn) selCat(btn.dataset.cat);
+  };
   // History category select
   const hc = document.getElementById('h-cat');
   if (hc) {
@@ -682,6 +733,8 @@ function renderCatGrid() {
 }
 
 function renderConfigPage() {
+  const ts = document.getElementById('cfg-token-status');
+  if (ts) ts.textContent = GH_TOKEN ? '✅ Token configurado neste navegador' : '❌ Sem token — modo offline';
   ['comp','aux','cats'].forEach(type => {
     const list = document.getElementById(`cfg-${type}-list`);
     const count = document.getElementById(`cfg-${type}-count`);
