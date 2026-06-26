@@ -1242,11 +1242,34 @@ function toggleHistChk(id, checked) {
   updatePersonBadges();
 }
 
+async function deletarItem(id) {
+  const d = dados.find(x => x.id === id);
+  if (!d) return;
+  const conf = confirm(`Excluir divergência NF ${d.nf} (${d.fornecedor})?\n\nEssa ação não pode ser desfeita.`);
+  if (!conf) return;
+  dados = dados.filter(x => x.id !== id);
+  persist();
+  if (GH_TOKEN) {
+    setDbStatus('sync');
+    try {
+      const file = await ghGet('dados.json');
+      if (file) dadosSHA = file.sha;
+      const result = await ghPut('dados.json', dados, dadosSHA);
+      if (result.content) dadosSHA = result.content.sha;
+      setDbStatus('ok');
+    } catch(e) { setDbStatus('error'); toast('Erro ao salvar no GitHub.','err'); }
+  }
+  renderHistorico();
+  renderDashboard();
+  updatePersonBadges();
+  toast('Registro excluído.','ok');
+}
+
 function renderHistorico() {
   const list = getHistData();
   document.getElementById('h-cnt').textContent=`${list.length} registro(s)`;
   const tbody=document.getElementById('h-body');
-  if (!list.length){tbody.innerHTML=`<tr><td colspan="10" class="empty">Nenhum registro.</td></tr>`;return;}
+  if (!list.length){tbody.innerHTML=`<tr><td colspan="11" class="empty">Nenhum registro.</td></tr>`;return;}
   tbody.innerHTML=list.map(d=>{
     const catLbl=d.categoria==='Outros'&&d.descOutros?`Outros: ${d.descOutros}`:d.categoria;
     const origBdg=d.origem?`<span class="badge b-${d.origem.toLowerCase()}">${d.origem}</span>`:'—';
@@ -1260,6 +1283,7 @@ function renderHistorico() {
       <td><span class="badge b-${sitKey==='pend'?'pend':sitKey}">${sitLbl}</span></td>
       <td>${d.auxiliar||'—'}</td><td>${d.registradoPor}</td>
       <td style="text-align:center;"><input type="checkbox" class="hist-chk" ${isConf?'checked':''} onchange="toggleHistChk(${d.id},this.checked)" title="${isConf?'Desmarcar':'Marcar como conferido'}"></td>
+      <td style="text-align:center;"><button onclick="deletarItem(${d.id})" title="Excluir" style="background:none;border:none;cursor:pointer;font-size:1rem;opacity:.4;transition:opacity .15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4">🗑️</button></td>
     </tr>`;
   }).join('');
 }
