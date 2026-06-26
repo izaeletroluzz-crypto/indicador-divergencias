@@ -1011,6 +1011,8 @@ function openResp(id, personName) {
     <div class="info-item"><div class="ik">Fornecedor</div><div class="iv">${d.fornecedor}</div></div>
     <div class="info-item"><div class="ik">Categoria</div><div class="iv">${catLbl}</div></div>
     ${d.obs?`<div class="info-item" style="grid-column:1/-1"><div class="ik">Observação</div><div class="iv">${d.obs}</div></div>`:''}
+    ${d.responsavelInterno?`<div class="info-item"><div class="ik">Responsável (Interno)</div><div class="iv">${d.responsavelInterno}</div></div>`:''}
+    ${d.explicacaoInterna?`<div class="info-item"><div class="ik">Explicação (Interno)</div><div class="iv">${d.explicacaoInterna}</div></div>`:''}
     ${nAnx?`<div class="info-item" style="grid-column:1/-1"><div class="ik">Anexos</div><div class="iv"><button class="btn btn-ghost btn-sm" onclick="openAnexos(${d.id})">📎 Ver ${nAnx} anexo${nAnx>1?'s':''}</button></div></div>`:''}
   `;
 
@@ -1032,6 +1034,16 @@ function openResp(id, personName) {
         <button type="button" class="tog ${rmOrig==='EXTERNO'?'sel-red':''}"   id="rm-ext" onclick="setRmOrig('EXTERNO')">🏭 Externo</button>
         <button type="button" class="tog ${rmOrig==='INTERNO'?'sel-amber':''}" id="rm-int" onclick="setRmOrig('INTERNO')">🏢 Interno</button>
       </div>
+    </div>
+    <div id="rm-interno-wrap" style="display:${rmOrig==='INTERNO'?'block':'none'}">
+      <div class="mfg">
+        <label>Responsável pelo erro</label>
+        <input type="text" id="rm-responsavel" placeholder="Nome de quem errou..." value="${d.responsavelInterno||''}">
+      </div>
+      <div class="mfg">
+        <label>Explicação breve</label>
+        <input type="text" id="rm-explicacao" placeholder="O que aconteceu..." value="${d.explicacaoInterna||''}">
+      </div>
     </div>`:''}
     <div class="mfg">
       <label>Observação</label>
@@ -1042,7 +1054,8 @@ function openResp(id, personName) {
   document.getElementById('rm-save').onclick = () => saveResp(personName);
 
   if (isComp) {
-    const opts = AUXILIARES.map(a=>`<option value="${a}"${d.auxiliar===a?' selected':''}>${a}</option>`).join('');
+    const allPeople = [...new Set([...COMPRADORES, ...AUXILIARES])];
+    const opts = allPeople.map(a=>`<option value="${a}"${d.auxiliar===a?' selected':''}>${a}</option>`).join('');
     auxOrig = '';
     document.getElementById('rm-aux').innerHTML = `
       <hr class="divider">
@@ -1091,6 +1104,8 @@ function setRmOrig(v) {
   const int = document.getElementById('rm-int');
   if (ext) ext.classList.toggle('sel-red',   v==='EXTERNO');
   if (int) int.classList.toggle('sel-amber', v==='INTERNO');
+  const wrap = document.getElementById('rm-interno-wrap');
+  if (wrap) wrap.style.display = v==='INTERNO' ? 'block' : 'none';
 }
 
 function saveResp(personName) {
@@ -1100,7 +1115,16 @@ function saveResp(personName) {
   const d = dados.find(x=>x.id===editingId);
   if (!d) return;
   d.situacao    = rmSit;
-  if (isComp) d.origem = rmOrig;
+  if (isComp) {
+    d.origem = rmOrig;
+    if (rmOrig === 'INTERNO') {
+      d.responsavelInterno = (document.getElementById('rm-responsavel')||{}).value?.trim() || d.responsavelInterno || '';
+      d.explicacaoInterna  = (document.getElementById('rm-explicacao')||{}).value?.trim()  || d.explicacaoInterna  || '';
+    } else {
+      d.responsavelInterno = '';
+      d.explicacaoInterna  = '';
+    }
+  }
   d.obsResposta = document.getElementById('rm-obs').value.trim();
   d.atualizadoEm = new Date().toISOString();
   persistItem(d);
