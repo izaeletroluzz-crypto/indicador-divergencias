@@ -21,27 +21,6 @@
     "conferido": false
   },
   {
-    "id": 1782732229208,
-    "data": "2026-06-29",
-    "nf": "rnfgn",
-    "destino": "João Victor",
-    "fornecedor": "Philips",
-    "registradoPor": "—",
-    "categoria": "Sem ordem de compra",
-    "descOutros": "",
-    "obs": "",
-    "anexos": [],
-    "situacao": "REALIZADO",
-    "origem": "EXTERNO",
-    "obsResposta": "",
-    "auxiliar": "Lucas",
-    "criadoEm": "2026-06-29T11:23:49.209Z",
-    "atualizadoEm": "2026-06-29T11:25:22.368Z",
-    "responsavelInterno": "",
-    "explicacaoInterna": "",
-    "conferido": false
-  },
-  {
     "id": 1782732400211,
     "data": "2026-06-29",
     "nf": "ssv",
