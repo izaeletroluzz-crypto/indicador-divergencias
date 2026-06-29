@@ -1,0 +1,21 @@
+{
+  "compradores": [
+    "João Victor",
+    "Matheus",
+    "Tanabi",
+    "Natanael",
+    "Thais"
+  ],
+  "auxiliares": [
+    "Lucas",
+    "Felipe",
+    "Isadora"
+  ],
+  "categorias": [
+    "Sem ordem de compra",
+    "Preço divergente",
+    "Produto errado",
+    "Frete divergente",
+    "Outros"
+  ]
+}
