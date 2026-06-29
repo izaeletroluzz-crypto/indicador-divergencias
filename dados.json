@@ -30,11 +30,13 @@
     "descOutros": "",
     "obs": "",
     "anexos": [],
-    "situacao": "",
-    "origem": "",
+    "situacao": "REALIZADO",
+    "origem": "EXTERNO",
     "obsResposta": "",
     "auxiliar": "Lucas",
     "criadoEm": "2026-06-29T11:23:49.209Z",
-    "atualizadoEm": "2026-06-29T11:24:37.601Z"
+    "atualizadoEm": "2026-06-29T11:24:59.624Z",
+    "responsavelInterno": "",
+    "explicacaoInterna": ""
   }
 ]
