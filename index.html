@@ -328,8 +328,9 @@ textarea{resize:vertical;min-height:66px}
           <select id="f-dest"><option value="">Selecione...</option></select>
         </div>
       </div>
-      <div class="frow">
+      <div class="frow s3">
         <div class="fg2"><label>Fornecedor<span class="req">*</span></label><input type="text" id="f-forn" placeholder="Nome do fornecedor"></div>
+        <div class="fg2"><label>Filial</label><input type="text" id="f-filial" placeholder="Ex: Matriz, Filial SP..."></div>
         <div class="fg2"><label>Registrado por</label><input type="text" id="f-resp" placeholder="Seu nome"></div>
       </div>
 
@@ -398,7 +399,7 @@ textarea{resize:vertical;min-height:66px}
     <div style="overflow-x:auto;">
       <table>
         <thead><tr>
-          <th>Data</th><th>NF</th><th>Comprador</th><th>Fornecedor</th>
+          <th>Data</th><th>NF</th><th>Comprador</th><th>Fornecedor</th><th>Filial</th>
           <th>Categoria</th><th>Origem</th><th>Situação</th><th>Auxiliar</th><th>Registrado por</th><th style="text-align:center;">✓</th>
         </tr></thead>
         <tbody id="h-body"></tbody>
@@ -854,6 +855,7 @@ function salvar() {
 
   const novoItem = {
     id: Date.now(), data, nf, destino: dest, fornecedor: forn,
+    filial: document.getElementById('f-filial').value.trim(),
     registradoPor: document.getElementById('f-resp').value.trim() || '—',
     categoria: catSel,
     descOutros: catSel==='Outros' ? document.getElementById('f-out').value.trim() : '',
@@ -871,7 +873,7 @@ function salvar() {
 }
 
 function resetForm() {
-  ['f-nf','f-forn','f-resp','f-obs','f-out'].forEach(id => document.getElementById(id).value='');
+  ['f-nf','f-forn','f-filial','f-resp','f-obs','f-out'].forEach(id => document.getElementById(id).value='');
   document.getElementById('f-dest').value='';
   document.getElementById('f-data').value=today();
   catSel='';
@@ -1012,6 +1014,7 @@ function openResp(id, personName) {
   const nAnx = (d.anexos||[]).length;
   document.getElementById('rm-info').innerHTML = `
     <div class="info-item"><div class="ik">Fornecedor</div><div class="iv">${d.fornecedor}</div></div>
+    <div class="info-item"><div class="ik">Filial</div><div class="iv">${d.filial||'—'}</div></div>
     <div class="info-item"><div class="ik">Categoria</div><div class="iv">${catLbl}</div></div>
     ${d.obs?`<div class="info-item" style="grid-column:1/-1"><div class="ik">Observação</div><div class="iv">${d.obs}</div></div>`:''}
     ${d.responsavelInterno?`<div class="info-item"><div class="ik">Responsável (Interno)</div><div class="iv">${d.responsavelInterno}</div></div>`:''}
@@ -1292,7 +1295,7 @@ function renderHistorico() {
   const list = getHistData();
   document.getElementById('h-cnt').textContent=`${list.length} registro(s)`;
   const tbody=document.getElementById('h-body');
-  if (!list.length){tbody.innerHTML=`<tr><td colspan="11" class="empty">Nenhum registro.</td></tr>`;return;}
+  if (!list.length){tbody.innerHTML=`<tr><td colspan="12" class="empty">Nenhum registro.</td></tr>`;return;}
   tbody.innerHTML=list.map(d=>{
     const catLbl=d.categoria==='Outros'&&d.descOutros?`Outros: ${d.descOutros}`:d.categoria;
     const origBdg=d.origem?`<span class="badge b-${d.origem.toLowerCase()}">${d.origem}</span>`:'—';
@@ -1301,7 +1304,7 @@ function renderHistorico() {
     const isDone = d.situacao === 'REALIZADO';
     const isConf = !!d.conferido;
     return`<tr class="${isDone?'tr-done':''}">
-      <td>${fmtDate(d.data)}</td><td>${d.nf}</td><td>${d.destino}</td><td>${d.fornecedor}</td>
+      <td>${fmtDate(d.data)}</td><td>${d.nf}</td><td>${d.destino}</td><td>${d.fornecedor}</td><td>${d.filial||'—'}</td>
       <td style="font-size:.79rem;">${catLbl}</td><td>${origBdg}</td>
       <td><span class="badge b-${sitKey==='pend'?'pend':sitKey}">${sitLbl}</span></td>
       <td>${d.auxiliar||'—'}</td><td>${d.registradoPor}</td>
@@ -1314,8 +1317,8 @@ function renderHistorico() {
 function exportCSV() {
   const list=getHistData();
   if (!list.length){toast('Nenhum dado para exportar.','warn');return;}
-  const hdr=['Data','NF','Destino','Fornecedor','Categoria','Desc.Outros','Origem','Situação','Auxiliar','Registrado por','Obs'];
-  const rows=list.map(d=>[d.data,d.nf,d.destino,d.fornecedor,d.categoria,d.descOutros||'',d.origem||'',d.situacao||'',d.auxiliar||'',d.registradoPor,`"${(d.obs||'').replace(/"/g,'""')}"`].join(';'));
+  const hdr=['Data','NF','Destino','Fornecedor','Filial','Categoria','Desc.Outros','Origem','Situação','Auxiliar','Registrado por','Obs'];
+  const rows=list.map(d=>[d.data,d.nf,d.destino,d.fornecedor,d.filial||'',d.categoria,d.descOutros||'',d.origem||'',d.situacao||'',d.auxiliar||'',d.registradoPor,`"${(d.obs||'').replace(/"/g,'""')}"`].join(';'));
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob(['﻿'+[hdr.join(';'),...rows].join('\n')],{type:'text/csv;charset=utf-8;'}));
   a.download=`divergencias_${today()}.csv`;
