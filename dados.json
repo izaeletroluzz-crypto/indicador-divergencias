@@ -16,11 +16,14 @@
         "type": ""
       }
     ],
-    "situacao": "",
-    "origem": "",
-    "obsResposta": "",
+    "situacao": "REALIZADO",
+    "origem": "EXTERNO",
+    "obsResposta": "centavos mais barato",
     "auxiliar": "",
-    "criadoEm": "2026-06-29T15:05:33.694Z"
+    "criadoEm": "2026-06-29T15:05:33.694Z",
+    "responsavelInterno": "",
+    "explicacaoInterna": "",
+    "atualizadoEm": "2026-06-29T15:48:37.127Z"
   },
   {
     "id": 1782746583895,
