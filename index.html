@@ -938,7 +938,7 @@ function renderPersonPage(name) {
       <div style="overflow-x:auto;">
         <table>
           <thead><tr>
-            <th>Data</th><th>NF</th><th>Fornecedor</th><th>Categoria</th>
+            <th>Data</th><th>NF</th><th>Fornecedor</th><th>Filial</th><th>Categoria</th>
             <th>Origem</th><th>Situação</th>
             ${isComp?'<th>Auxiliar</th>':''}
             <th>Anexos</th><th>Ação</th>
@@ -969,7 +969,7 @@ function renderPsTable(name) {
   if (!tbody) return;
 
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="${isComp?9:8}" class="empty">Nenhuma divergência encontrada.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${isComp?10:9}" class="empty">Nenhuma divergência encontrada.</td></tr>`;
     return;
   }
 
@@ -990,6 +990,7 @@ function renderPsTable(name) {
       <td>${fmtDate(d.data)}</td>
       <td><strong>${d.nf}</strong></td>
       <td style="font-size:.82rem;">${d.fornecedor}</td>
+      <td style="font-size:.82rem;">${d.filial||'—'}</td>
       <td style="font-size:.79rem;max-width:140px;">${catLbl}</td>
       <td>${origBdg}</td>
       <td>${sitBdg}</td>
