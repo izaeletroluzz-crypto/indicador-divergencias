@@ -564,8 +564,9 @@ function setDbStatus(state) {
 }
 
 async function ghGet(path) {
-  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`, {
-    headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}&_=${Date.now()}`, {
+    headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' },
+    cache: 'no-store'
   });
   if (res.status === 404) return null;
   if (res.status === 401) throw new Error('TOKEN_INVALIDO');
