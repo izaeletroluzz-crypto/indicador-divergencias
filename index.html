@@ -564,29 +564,22 @@ function setDbStatus(state) {
 }
 
 async function ghGet(path) {
-  // SHA via API (necessário para escrita)
-  const apiRes = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`, {
-    headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' },
-    cache: 'no-store'
-  });
+  // Usa apenas a API autenticada — evita o cache do CDN do raw.githubusercontent.com
+  const apiRes = await fetch(
+    `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}&_=${Date.now()}`,
+    {
+      headers: {
+        Authorization: `token ${GH_TOKEN}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    }
+  );
   if (apiRes.status === 404) return null;
   if (apiRes.status === 401) throw new Error('TOKEN_INVALIDO');
-  const meta = await apiRes.json();
-
-  // Conteúdo via URL raw (sem cache de servidor, sempre atualizado)
-  try {
-    const rawRes = await fetch(
-      `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${path}?_=${Date.now()}`,
-      { cache: 'no-store' }
-    );
-    if (rawRes.ok) {
-      const text = await rawRes.text();
-      return { sha: meta.sha, content: null, _parsed: JSON.parse(text) };
-    }
-  } catch(e) {}
-
-  // Fallback: conteúdo da API
-  return meta;
+  return await apiRes.json(); // inclui sha + content (base64)
 }
 
 function ghExtract(file) {
