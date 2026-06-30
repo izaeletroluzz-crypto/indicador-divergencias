@@ -95,23 +95,5 @@
     "obsResposta": "",
     "auxiliar": "",
     "criadoEm": "2026-06-30T11:46:19.006Z"
-  },
-  {
-    "id": 1782821045021,
-    "data": "2026-06-30",
-    "nf": "6666666",
-    "destino": "Natanael",
-    "fornecedor": "TESTE",
-    "filial": "MATRIZ",
-    "registradoPor": "—",
-    "categoria": "Frete divergente",
-    "descOutros": "",
-    "obs": "",
-    "anexos": [],
-    "situacao": "",
-    "origem": "",
-    "obsResposta": "",
-    "auxiliar": "",
-    "criadoEm": "2026-06-30T12:04:05.021Z"
   }
 ]
