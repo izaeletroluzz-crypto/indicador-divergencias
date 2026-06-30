@@ -582,6 +582,8 @@ async function ghPut(path, content, sha) {
     headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+  if (res.status === 409 || res.status === 422) throw new Error('CONFLICT');
+  if (res.status === 401) throw new Error('TOKEN_INVALIDO');
   return await res.json();
 }
 
@@ -621,36 +623,46 @@ function persist() {
   localStorage.setItem('div_v3', JSON.stringify(dados));
 }
 
+async function mergeAndSave(retries = 2) {
+  const remoteFile = await ghGet('dados.json');
+  let merged = [...dados];
+  if (remoteFile && remoteFile.content) {
+    dadosSHA = remoteFile.sha;
+    const remote = ghDecode(remoteFile.content);
+    remote.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
+    merged = merged.map(local => {
+      const rem = remote.find(x => x.id === local.id);
+      if (!rem) return local;
+      const localTs = local.atualizadoEm || local.criadoEm || '';
+      const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
+      return localTs >= remTs ? local : rem;
+    });
+    dados = merged; persist();
+  }
+  try {
+    const result = await ghPut('dados.json', merged, dadosSHA);
+    if (result.content) dadosSHA = result.content.sha;
+  } catch(e) {
+    if (e.message === 'CONFLICT' && retries > 0) {
+      await new Promise(r => setTimeout(r, 500));
+      return mergeAndSave(retries - 1);
+    }
+    throw e;
+  }
+}
+
 async function persistItem(d) {
   persist();
   if (!GH_TOKEN) return;
   setDbStatus('sync');
   try {
-    // Busca versão mais recente do GitHub e mescla antes de salvar
-    const remoteFile = await ghGet('dados.json');
-    let merged = [...dados];
-    if (remoteFile && remoteFile.content) {
-      dadosSHA = remoteFile.sha;
-      const remote = ghDecode(remoteFile.content);
-      // Adiciona registros do GitHub que não existem localmente
-      remote.forEach(r => {
-        if (!merged.find(x => x.id === r.id)) merged.push(r);
-      });
-      // Atualiza registros locais com versão mais recente (por atualizadoEm)
-      merged = merged.map(local => {
-        const rem = remote.find(x => x.id === local.id);
-        if (!rem) return local;
-        const localTs = local.atualizadoEm || local.criadoEm || '';
-        const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
-        return localTs >= remTs ? local : rem;
-      });
-      dados = merged;
-      persist();
-    }
-    const result = await ghPut('dados.json', merged, dadosSHA);
-    if (result.content) dadosSHA = result.content.sha;
+    await mergeAndSave();
     setDbStatus('ok');
-  } catch(e) { setDbStatus('error'); console.error('persistItem error:', e); }
+  } catch(e) {
+    setDbStatus('error');
+    console.error('persistItem error:', e);
+    toast('Erro ao salvar no GitHub. Tente sincronizar.', 'err');
+  }
 }
 
 async function deleteItem(id) {
@@ -674,12 +686,29 @@ async function loadFromGitHub() {
       localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
       localStorage.setItem('cfg_cats', JSON.stringify(CATS));
     }
-    // Dados
+    // Dados — mescla GitHub com local para não perder registros de nenhuma máquina
     const dadosFile = await ghGet('dados.json');
     if (dadosFile && dadosFile.content) {
       dadosSHA = dadosFile.sha;
-      dados = ghDecode(dadosFile.content);
+      const remote = ghDecode(dadosFile.content);
+      let merged = [...dados];
+      // Adiciona do GitHub o que não existe localmente
+      remote.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
+      // Para itens que existem nos dois, mantém o mais recente
+      merged = merged.map(local => {
+        const rem = remote.find(x => x.id === local.id);
+        if (!rem) return local;
+        const localTs = local.atualizadoEm || local.criadoEm || '';
+        const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
+        return localTs >= remTs ? local : rem;
+      });
+      dados = merged;
       persist();
+      // Salva mesclagem de volta no GitHub para unificar
+      try {
+        const result = await ghPut('dados.json', merged, dadosSHA);
+        if (result.content) dadosSHA = result.content.sha;
+      } catch(e) { /* conflito: próxima sincronização resolve */ }
     }
     setDbStatus('ok');
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
@@ -1562,6 +1591,8 @@ renderAllDynamic();
 renderDashboard();
 // Depois sincroniza com GitHub (se token configurado)
 loadFromGitHub();
+// Auto-sincroniza a cada 2 minutos
+setInterval(() => { if (GH_TOKEN) loadFromGitHub(); }, 2 * 60 * 1000);
 </script>
 </body>
 </html>
