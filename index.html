@@ -677,15 +677,16 @@ async function persistItem(d) {
   try {
     await mergeAndSave();
     setDbStatus('ok');
+    toast('☁️ Salvo no GitHub!', 'ok');
   } catch(e) {
     setDbStatus('error');
     console.error('persistItem error:', e);
     if (e.message === 'TOKEN_INVALIDO') {
-      toast('Token inválido. Reconfigure em ⚙️ Configurações.', 'err');
+      toast('⚠️ Token inválido. Reconfigure em ⚙️ Configurações.', 'err');
     } else if (e.message === 'SEM_PERMISSAO') {
-      toast('Token sem permissão de escrita. Gere um novo token com acesso "repo".', 'err');
+      toast('⚠️ Token sem permissão de escrita. Gere um novo token com acesso "repo".', 'err');
     } else {
-      toast('Erro ao salvar: ' + e.message, 'err');
+      toast('⚠️ Erro ao salvar no GitHub: ' + e.message, 'err');
     }
   }
 }
@@ -713,29 +714,26 @@ async function loadFromGitHub() {
         localStorage.setItem('cfg_cats', JSON.stringify(CATS));
       }
     }
-    // Dados — mescla GitHub com local para não perder registros de nenhuma máquina
+    // Dados — apenas LEITURA durante sincronização (escrita só via persistItem)
     const dadosFile = await ghGet('dados.json');
     if (dadosFile) {
       dadosSHA = dadosFile.sha;
       const remote = ghExtract(dadosFile);
-      let merged = [...dados];
-      // Adiciona do GitHub o que não existe localmente
-      remote.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
-      // Para itens que existem nos dois, mantém o mais recente
-      merged = merged.map(local => {
-        const rem = remote.find(x => x.id === local.id);
-        if (!rem) return local;
-        const localTs = local.atualizadoEm || local.criadoEm || '';
-        const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
-        return localTs >= remTs ? local : rem;
-      });
-      dados = merged;
-      persist();
-      // Salva mesclagem de volta no GitHub para unificar
-      try {
-        const result = await ghPut('dados.json', merged, dadosSHA);
-        if (result.content) dadosSHA = result.content.sha;
-      } catch(e) { /* conflito: próxima sincronização resolve */ }
+      if (remote && Array.isArray(remote)) {
+        let merged = [...dados];
+        // Adiciona do GitHub o que não existe localmente
+        remote.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
+        // Para itens que existem nos dois, mantém o mais recente
+        merged = merged.map(local => {
+          const rem = remote.find(x => x.id === local.id);
+          if (!rem) return local;
+          const localTs = local.atualizadoEm || local.criadoEm || '';
+          const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
+          return localTs >= remTs ? local : rem;
+        });
+        dados = merged;
+        persist();
+      }
     }
     setDbStatus('ok');
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
