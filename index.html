@@ -626,7 +626,28 @@ async function persistItem(d) {
   if (!GH_TOKEN) return;
   setDbStatus('sync');
   try {
-    const result = await ghPut('dados.json', dados, dadosSHA);
+    // Busca versão mais recente do GitHub e mescla antes de salvar
+    const remoteFile = await ghGet('dados.json');
+    let merged = [...dados];
+    if (remoteFile && remoteFile.content) {
+      dadosSHA = remoteFile.sha;
+      const remote = ghDecode(remoteFile.content);
+      // Adiciona registros do GitHub que não existem localmente
+      remote.forEach(r => {
+        if (!merged.find(x => x.id === r.id)) merged.push(r);
+      });
+      // Atualiza registros locais com versão mais recente (por atualizadoEm)
+      merged = merged.map(local => {
+        const rem = remote.find(x => x.id === local.id);
+        if (!rem) return local;
+        const localTs = local.atualizadoEm || local.criadoEm || '';
+        const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
+        return localTs >= remTs ? local : rem;
+      });
+      dados = merged;
+      persist();
+    }
+    const result = await ghPut('dados.json', merged, dadosSHA);
     if (result.content) dadosSHA = result.content.sha;
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); console.error('persistItem error:', e); }
