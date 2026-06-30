@@ -607,7 +607,10 @@ async function ghPut(path, content, sha) {
   });
   if (res.status === 409 || res.status === 422) throw new Error('CONFLICT');
   if (res.status === 401) throw new Error('TOKEN_INVALIDO');
-  return await res.json();
+  if (res.status === 403) throw new Error('SEM_PERMISSAO');
+  const json = await res.json();
+  if (json.message && !json.content) throw new Error('GH_ERRO: ' + json.message);
+  return json;
 }
 
 function ghDecode(content) {
@@ -684,7 +687,13 @@ async function persistItem(d) {
   } catch(e) {
     setDbStatus('error');
     console.error('persistItem error:', e);
-    toast('Erro ao salvar no GitHub. Tente sincronizar.', 'err');
+    if (e.message === 'TOKEN_INVALIDO') {
+      toast('Token inválido. Reconfigure em ⚙️ Configurações.', 'err');
+    } else if (e.message === 'SEM_PERMISSAO') {
+      toast('Token sem permissão de escrita. Gere um novo token com acesso "repo".', 'err');
+    } else {
+      toast('Erro ao salvar: ' + e.message, 'err');
+    }
   }
 }
 
