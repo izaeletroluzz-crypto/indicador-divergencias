@@ -69,11 +69,14 @@
         "type": "image/png"
       }
     ],
-    "situacao": "",
-    "origem": "",
+    "situacao": "REALIZADO",
+    "origem": "INTERNO",
     "obsResposta": "",
     "auxiliar": "",
-    "criadoEm": "2026-06-30T11:40:12.898Z"
+    "criadoEm": "2026-06-30T11:40:12.898Z",
+    "responsavelInterno": "Ingá Soft",
+    "explicacaoInterna": "Sistema buscou códigos diferentes no lançamento.",
+    "atualizadoEm": "2026-06-30T11:56:30.133Z"
   },
   {
     "id": 1782819979005,
@@ -92,23 +95,5 @@
     "obsResposta": "",
     "auxiliar": "",
     "criadoEm": "2026-06-30T11:46:19.006Z"
-  },
-  {
-    "id": 1782820383809,
-    "data": "2026-06-30",
-    "nf": "1234",
-    "destino": "João Victor",
-    "fornecedor": "Wetzel",
-    "filial": "Matriz",
-    "registradoPor": "—",
-    "categoria": "Produto errado",
-    "descOutros": "",
-    "obs": "",
-    "anexos": [],
-    "situacao": "",
-    "origem": "",
-    "obsResposta": "",
-    "auxiliar": "",
-    "criadoEm": "2026-06-30T11:53:03.809Z"
   }
 ]
