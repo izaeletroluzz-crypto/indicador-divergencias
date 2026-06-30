@@ -77,5 +77,23 @@
     "responsavelInterno": "Ingá Soft",
     "explicacaoInterna": "Sistema buscou códigos diferentes no lançamento.",
     "atualizadoEm": "2026-06-30T11:56:30.133Z"
+  },
+  {
+    "id": 1782819979005,
+    "data": "2026-06-30",
+    "nf": "55555",
+    "destino": "Matheus",
+    "fornecedor": "TASCHIBRA",
+    "filial": "MATRIZ",
+    "registradoPor": "—",
+    "categoria": "Sem ordem de compra",
+    "descOutros": "",
+    "obs": "",
+    "anexos": [],
+    "situacao": "",
+    "origem": "",
+    "obsResposta": "",
+    "auxiliar": "",
+    "criadoEm": "2026-06-30T11:46:19.006Z"
   }
 ]
