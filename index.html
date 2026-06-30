@@ -564,13 +564,36 @@ function setDbStatus(state) {
 }
 
 async function ghGet(path) {
-  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}&_=${Date.now()}`, {
+  // SHA via API (necessário para escrita)
+  const apiRes = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`, {
     headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' },
     cache: 'no-store'
   });
-  if (res.status === 404) return null;
-  if (res.status === 401) throw new Error('TOKEN_INVALIDO');
-  return await res.json();
+  if (apiRes.status === 404) return null;
+  if (apiRes.status === 401) throw new Error('TOKEN_INVALIDO');
+  const meta = await apiRes.json();
+
+  // Conteúdo via URL raw (sem cache de servidor, sempre atualizado)
+  try {
+    const rawRes = await fetch(
+      `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${path}?_=${Date.now()}`,
+      { cache: 'no-store' }
+    );
+    if (rawRes.ok) {
+      const text = await rawRes.text();
+      return { sha: meta.sha, content: null, _parsed: JSON.parse(text) };
+    }
+  } catch(e) {}
+
+  // Fallback: conteúdo da API
+  return meta;
+}
+
+function ghExtract(file) {
+  if (!file) return null;
+  if (file._parsed !== undefined) return file._parsed;
+  if (file.content) return ghDecode(file.content);
+  return null;
 }
 
 async function ghPut(path, content, sha) {
@@ -626,9 +649,9 @@ function persist() {
 async function mergeAndSave(retries = 2) {
   const remoteFile = await ghGet('dados.json');
   let merged = [...dados];
-  if (remoteFile && remoteFile.content) {
+  if (remoteFile) {
     dadosSHA = remoteFile.sha;
-    const remote = ghDecode(remoteFile.content);
+    const remote = ghExtract(remoteFile) || [];
     remote.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
     merged = merged.map(local => {
       const rem = remote.find(x => x.id === local.id);
@@ -676,21 +699,23 @@ async function loadFromGitHub() {
   try {
     // Config
     const cfgFile = await ghGet('config.json');
-    if (cfgFile && cfgFile.content) {
+    if (cfgFile) {
       configSHA = cfgFile.sha;
-      const cfg = ghDecode(cfgFile.content);
-      if (cfg.compradores) COMPRADORES = cfg.compradores;
-      if (cfg.auxiliares)  AUXILIARES  = cfg.auxiliares;
-      if (cfg.categorias)  CATS        = cfg.categorias;
-      localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES));
-      localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
-      localStorage.setItem('cfg_cats', JSON.stringify(CATS));
+      const cfg = ghExtract(cfgFile);
+      if (cfg) {
+        if (cfg.compradores) COMPRADORES = cfg.compradores;
+        if (cfg.auxiliares)  AUXILIARES  = cfg.auxiliares;
+        if (cfg.categorias)  CATS        = cfg.categorias;
+        localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES));
+        localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
+        localStorage.setItem('cfg_cats', JSON.stringify(CATS));
+      }
     }
     // Dados — mescla GitHub com local para não perder registros de nenhuma máquina
     const dadosFile = await ghGet('dados.json');
-    if (dadosFile && dadosFile.content) {
+    if (dadosFile) {
       dadosSHA = dadosFile.sha;
-      const remote = ghDecode(dadosFile.content);
+      const remote = ghExtract(dadosFile);
       let merged = [...dados];
       // Adiciona do GitHub o que não existe localmente
       remote.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
