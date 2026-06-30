@@ -97,14 +97,14 @@
     "criadoEm": "2026-06-30T11:46:19.006Z"
   },
   {
-    "id": 1782820383809,
+    "id": 1782821045021,
     "data": "2026-06-30",
-    "nf": "1234",
-    "destino": "João Victor",
-    "fornecedor": "Wetzel",
-    "filial": "Matriz",
+    "nf": "6666666",
+    "destino": "Natanael",
+    "fornecedor": "TESTE",
+    "filial": "MATRIZ",
     "registradoPor": "—",
-    "categoria": "Produto errado",
+    "categoria": "Frete divergente",
     "descOutros": "",
     "obs": "",
     "anexos": [],
@@ -112,6 +112,6 @@
     "origem": "",
     "obsResposta": "",
     "auxiliar": "",
-    "criadoEm": "2026-06-30T11:53:03.809Z"
+    "criadoEm": "2026-06-30T12:04:05.021Z"
   }
 ]
