@@ -487,14 +487,11 @@ textarea{resize:vertical;min-height:66px}
       ⚠️ Remover um comprador/auxiliar não apaga os registros já vinculados a ele — apenas remove a opção para novos registros.
     </div>
 
-    <!-- Conexão JSONBin -->
+    <!-- Conexão Firebase -->
     <div class="form-card" style="margin-top:16px;">
-      <div style="font-size:.95rem;font-weight:800;margin-bottom:10px;">🔑 Conexão JSONBin</div>
-      <p style="font-size:.82rem;color:#666;margin-bottom:12px;">A chave API é salva apenas neste navegador. Cada usuário precisa configurar a sua.</p>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <span id="cfg-token-status" style="font-size:.82rem;color:#666;flex:1;"></span>
-        <button class="btn btn-primary" onclick="showTokenModal()">🔑 Alterar Chave</button>
-      </div>
+      <div style="font-size:.95rem;font-weight:800;margin-bottom:10px;">🔑 Conexão Firebase</div>
+      <p style="font-size:.82rem;color:#666;margin-bottom:12px;">Banco de dados compartilhado via Firebase. Nenhuma configuração necessária.</p>
+      <span id="cfg-token-status" style="font-size:.82rem;color:#10b981;font-weight:600;"></span>
     </div>
   </div>
 </div>
@@ -537,40 +534,9 @@ textarea{resize:vertical;min-height:66px}
 
 <div id="toast"></div>
 
-<!-- MODAL TOKEN -->
-<div id="token-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center;">
-  <div style="background:white;border-radius:14px;padding:28px;max-width:420px;width:93%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
-    <div style="font-size:1.5rem;margin-bottom:6px;">🔑</div>
-    <h3 style="font-size:1rem;font-weight:800;margin-bottom:6px;">Configurar acesso ao banco</h3>
-    <p style="font-size:.83rem;color:#666;margin-bottom:16px;line-height:1.5;">Cole a sua <strong>JSONBin API Key (X-Master-Key)</strong> para conectar ao banco de dados. Ela fica salva só neste navegador.</p>
-    <input type="password" id="token-input" placeholder="$2a$10$..."
-      style="width:100%;padding:10px 12px;border:1.5px solid #e2e6ea;border-radius:8px;font-size:.85rem;margin-bottom:12px;outline:none;"
-      onkeydown="if(event.key==='Enter')saveToken()">
-    <div style="display:flex;gap:8px;">
-      <button onclick="saveToken()" style="flex:1;background:#3b82f6;color:white;border:none;padding:10px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.88rem;">Conectar</button>
-      <button onclick="document.getElementById('token-modal').style.display='none'" style="background:#f0f2f5;color:#555;border:none;padding:10px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:.88rem;">Cancelar</button>
-    </div>
-    <p style="font-size:.74rem;color:#bbb;margin-top:12px;">O token não é armazenado no código — apenas no seu navegador.</p>
-  </div>
-</div>
-
 <script>
-// ═══ GITHUB API ════════════════════════════════════════
-const JB_BIN_ID = '6a688a1fda38895dfe9ae7ab';
-const JB_URL    = 'https://api.jsonbin.io/v3/b/' + JB_BIN_ID;
-let JB_KEY = localStorage.getItem('jb_key') || '';
-
-function showTokenModal() {
-  document.getElementById('token-modal').style.display = 'flex';
-}
-function saveToken() {
-  const t = document.getElementById('token-input').value.trim();
-  if (!t) return;
-  localStorage.setItem('jb_key', t);
-  JB_KEY = t;
-  document.getElementById('token-modal').style.display = 'none';
-  syncFromJB();
-}
+// ═══ FIREBASE ══════════════════════════════════════════
+const FB_URL = 'https://indicador-divergencias-default-rtdb.firebaseio.com';
 
 function setDbStatus(state) {
   const dot = document.getElementById('db-dot');
@@ -587,26 +553,20 @@ function setDbStatus(state) {
   lbl.textContent = s.text;
 }
 
-async function jbRead() {
-  const res = await fetch(JB_URL + '/latest', {
-    headers: { 'X-Master-Key': JB_KEY },
-    cache: 'no-store'
-  });
-  if (res.status === 401) throw new Error('TOKEN_INVALIDO');
-  if (!res.ok) throw new Error('JB_ERRO_' + res.status);
-  const json = await res.json();
-  return json.record; // { dados: [...], config: {...} }
+async function fbRead() {
+  const res = await fetch(FB_URL + '/app.json', { cache: 'no-store' });
+  if (!res.ok) throw new Error('FB_ERRO_' + res.status);
+  return await res.json(); // { dados: [...], config: {...} } ou null
 }
 
-async function jbWrite(record) {
-  const res = await fetch(JB_URL, {
+async function fbWrite(record) {
+  const res = await fetch(FB_URL + '/app.json', {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JB_KEY },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(record),
     cache: 'no-store'
   });
-  if (res.status === 401) throw new Error('TOKEN_INVALIDO');
-  if (!res.ok) throw new Error('JB_ERRO_' + res.status);
+  if (!res.ok) throw new Error('FB_ERRO_' + res.status);
   return await res.json();
 }
 
@@ -619,12 +579,11 @@ async function persistConfig() {
   localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES));
   localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
   localStorage.setItem('cfg_cats', JSON.stringify(CATS));
-  if (!JB_KEY) return;
   try {
-    const remote = await jbRead();
+    const remote = await fbRead();
     const record = remote || { dados: dados, config: {} };
     record.config = { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS };
-    await jbWrite(record);
+    await fbWrite(record);
   } catch(e) { console.error('persistConfig error:', e); }
 }
 
@@ -644,7 +603,7 @@ function persist() {
 }
 
 async function mergeAndSave() {
-  const remote = await jbRead();
+  const remote = await fbRead();
   let merged = [...dados];
   if (remote && Array.isArray(remote.dados)) {
     remote.dados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
@@ -657,12 +616,11 @@ async function mergeAndSave() {
     });
     dados = merged; persist();
   }
-  await jbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+  await fbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
 }
 
 async function persistItem(d) {
   persist();
-  if (!JB_KEY) return;
   setDbStatus('sync');
   try {
     await mergeAndSave();
@@ -670,37 +628,31 @@ async function persistItem(d) {
     toast('☁️ Salvo!', 'ok');
   } catch(e) {
     setDbStatus('error');
-    if (e.message === 'TOKEN_INVALIDO') {
-      toast('⚠️ Chave inválida. Reconfigure em ⚙️ Configurações.', 'err');
-    } else {
-      toast('⚠️ Erro ao salvar: ' + e.message, 'err');
-    }
+    toast('⚠️ Erro ao salvar: ' + e.message, 'err');
   }
 }
 
 async function deleteItem(id) {
   dados = dados.filter(x => x.id !== id);
   persist();
-  if (!JB_KEY) { renderHistorico(); renderDashboard(); updatePersonBadges(); toast('Registro excluído.','ok'); return; }
   setDbStatus('sync');
   try {
-    const remote = await jbRead();
+    const remote = await fbRead();
     const remoteData = (remote?.dados || []).filter(x => x.id !== id);
     const merged = [...dados];
     remoteData.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
     dados = merged; persist();
-    await jbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+    await fbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); toast('⚠️ Erro ao excluir: ' + e.message, 'err'); }
   renderHistorico(); renderDashboard(); updatePersonBadges();
   toast('Registro excluído.', 'ok');
 }
 
-async function syncFromJB() {
-  if (!JB_KEY) { setDbStatus('offline'); showTokenModal(); return; }
+async function syncFromFB() {
   setDbStatus('sync');
   try {
-    const remote = await jbRead();
+    const remote = await fbRead();
     if (remote) {
       if (remote.config) {
         if (remote.config.compradores) { COMPRADORES = remote.config.compradores; localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES)); }
@@ -719,18 +671,16 @@ async function syncFromJB() {
           return localTs >= remTs ? local : rem;
         });
         dados = merged; persist();
-        // Se há dados locais que ainda não estão no JSONBin, envia agora
+        // Se há dados locais que não estão no Firebase, envia agora
         const localOnlyCount = dados.filter(d => !remoteDados.find(r => r.id === d.id)).length;
         if (localOnlyCount > 0) {
-          await jbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+          await fbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
         }
       } else if (dados.length > 0) {
-        // JSONBin sem dados mas há dados locais — envia tudo
-        await jbWrite({ dados: dados, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+        await fbWrite({ dados: dados, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
       }
     } else if (dados.length > 0) {
-      // Bin vazio mas há dados locais — envia tudo
-      await jbWrite({ dados: dados, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+      await fbWrite({ dados: dados, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
     }
     setDbStatus('ok');
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
@@ -738,24 +688,15 @@ async function syncFromJB() {
     renderDashboard();
     updatePersonBadges();
   } catch(e) {
-    if (e.message === 'TOKEN_INVALIDO') {
-      setDbStatus('error');
-      localStorage.removeItem('jb_key');
-      JB_KEY = '';
-      toast('Chave JSONBin inválida. Configure novamente.', 'warn');
-      setTimeout(showTokenModal, 1200);
-    } else {
-      setDbStatus('error');
-      toast('Erro ao conectar. Usando dados locais.', 'warn');
-    }
+    setDbStatus('error');
+    toast('Erro ao conectar ao banco. Usando dados locais.', 'warn');
   }
 }
 
 function today()   { return new Date().toISOString().split('T')[0]; }
 
 async function syncNow() {
-  if (!JB_KEY) { showTokenModal(); return; }
-  await syncFromJB();
+  await syncFromFB();
   toast('✓ Dados atualizados!', 'ok');
 }
 
@@ -826,7 +767,7 @@ function renderCatGrid() {
 
 function renderConfigPage() {
   const ts = document.getElementById('cfg-token-status');
-  if (ts) ts.textContent = JB_KEY ? '✅ Chave JSONBin configurada neste navegador' : '❌ Sem chave — modo offline';
+  if (ts) ts.textContent = '✅ Conectado ao Firebase';
   ['comp','aux','cats'].forEach(type => {
     const list = document.getElementById(`cfg-${type}-list`);
     const count = document.getElementById(`cfg-${type}-count`);
@@ -1364,15 +1305,14 @@ async function deletarItem(id) {
   if (!conf) return;
   dados = dados.filter(x => x.id !== id);
   persist();
-  if (!JB_KEY) { renderHistorico(); renderDashboard(); updatePersonBadges(); toast('Registro excluído.','ok'); return; }
   setDbStatus('sync');
   try {
-    const remote = await jbRead();
+    const remote = await fbRead();
     const remoteData = (remote?.dados || []).filter(x => x.id !== id);
     const merged = [...dados];
     remoteData.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
     dados = merged; persist();
-    await jbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+    await fbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); toast('⚠️ Erro ao excluir: ' + e.message, 'err'); }
   renderHistorico();
@@ -1680,10 +1620,10 @@ setInterval(tickClock, 30000);
 if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
 renderAllDynamic();
 renderDashboard();
-// Depois sincroniza com JSONBin (se chave configurada)
-syncFromJB();
+// Sincroniza com Firebase
+syncFromFB();
 // Auto-sincroniza a cada 2 minutos
-setInterval(() => { if (JB_KEY) syncFromJB(); }, 2 * 60 * 1000);
+setInterval(syncFromFB, 2 * 60 * 1000);
 </script>
 </body>
 </html>
