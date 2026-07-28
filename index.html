@@ -581,9 +581,8 @@ async function persistConfig() {
   localStorage.setItem('cfg_cats', JSON.stringify(CATS));
   try {
     const remote = await fbRead();
-    const record = remote || { dados: dados, config: {}, excluidos: [] };
+    const record = remote || { dados: dados, config: {} };
     record.config = { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS };
-    record.excluidos = excluidos;
     await fbWrite(record);
   } catch(e) { console.error('persistConfig error:', e); }
 }
@@ -599,43 +598,47 @@ let editingId  = null;
 let rmSit = '', rmOrig = '', auxOrig = '';
 let currentPerson = null;
 
-let excluidos = JSON.parse(localStorage.getItem('excluidos') || '[]'); // [{id, deletedAt}]
-
 function persist() {
   localStorage.setItem('div_v3', JSON.stringify(dados));
 }
-function persistExcluidos() {
-  localStorage.setItem('excluidos', JSON.stringify(excluidos));
+
+// Mescla arrays local + remoto.
+// Regra: item só no local → mantém SE for pendingSync (criado offline, ainda não salvo).
+//        item só no remoto → adiciona ao local.
+//        item nos dois → usa o mais recente pelo timestamp.
+function smartMerge(localArr, remoteArr) {
+  let merged = [...remoteArr];
+  localArr.forEach(local => {
+    const remIdx = merged.findIndex(r => r.id === local.id);
+    if (remIdx === -1) {
+      if (local.pendingSync) merged.push(local); // novo item local, ainda não foi pro Firebase
+      // se não tem pendingSync e não está no remoto → foi excluído por outra pessoa, não reinsere
+    } else {
+      const localTs = local.atualizadoEm || local.criadoEm || '';
+      const remTs   = merged[remIdx].atualizadoEm || merged[remIdx].criadoEm || '';
+      if (localTs > remTs) merged[remIdx] = local;
+    }
+  });
+  return merged;
 }
-function mergeExcluidos(remoteExc) {
-  if (!Array.isArray(remoteExc)) return;
-  remoteExc.forEach(e => { if (!excluidos.find(x => x.id === e.id)) excluidos.push(e); });
-  persistExcluidos();
+
+function markAllSynced() {
+  dados = dados.map(d => { const { pendingSync, ...rest } = d; return rest; });
+  persist();
 }
-function applyExcluidos(arr) {
-  return arr.filter(d => !excluidos.find(e => e.id === d.id));
-}
+
 function fbRecord(dadosMerged) {
-  return { dados: dadosMerged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS }, excluidos };
+  // Remove pendingSync antes de gravar no Firebase
+  const clean = dadosMerged.map(d => { const { pendingSync, ...rest } = d; return rest; });
+  return { dados: clean, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } };
 }
 
 async function mergeAndSave() {
   const remote = await fbRead();
-  mergeExcluidos(remote?.excluidos);
-  let merged = [...dados];
-  if (remote && Array.isArray(remote.dados)) {
-    remote.dados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
-    merged = merged.map(local => {
-      const rem = remote.dados.find(x => x.id === local.id);
-      if (!rem) return local;
-      const localTs = local.atualizadoEm || local.criadoEm || '';
-      const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
-      return localTs >= remTs ? local : rem;
-    });
-  }
-  merged = applyExcluidos(merged);
+  const merged = smartMerge(dados, remote?.dados || []);
   dados = merged; persist();
   await fbWrite(fbRecord(merged));
+  markAllSynced();
 }
 
 async function persistItem(d) {
@@ -652,19 +655,15 @@ async function persistItem(d) {
 }
 
 async function deleteItem(id) {
-  excluidos.push({ id, deletedAt: new Date().toISOString() });
-  persistExcluidos();
-  dados = applyExcluidos(dados); persist();
+  dados = dados.filter(x => x.id !== id); persist();
   setDbStatus('sync');
   try {
     const remote = await fbRead();
-    mergeExcluidos(remote?.excluidos);
-    let merged = (remote?.dados || []);
-    merged = applyExcluidos(merged);
-    // merge com local
-    dados.forEach(d => { if (!merged.find(x => x.id === d.id)) merged.push(d); });
-    dados = applyExcluidos(merged); persist();
-    await fbWrite(fbRecord(dados));
+    const remoteDados = (remote?.dados || []).filter(x => x.id !== id);
+    const merged = smartMerge(dados, remoteDados);
+    dados = merged; persist();
+    await fbWrite(fbRecord(merged));
+    markAllSynced();
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); toast('⚠️ Erro ao excluir: ' + e.message, 'err'); }
   renderHistorico(); renderDashboard(); updatePersonBadges();
@@ -681,31 +680,19 @@ async function syncFromFB() {
         if (remote.config.auxiliares)  { AUXILIARES  = remote.config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
         if (remote.config.categorias)  { CATS        = remote.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
       }
-      mergeExcluidos(remote.excluidos);
       if (Array.isArray(remote.dados)) {
-        const remoteDados = remote.dados;
-        let merged = [...dados];
-        remoteDados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
-        merged = merged.map(local => {
-          const rem = remoteDados.find(x => x.id === local.id);
-          if (!rem) return local;
-          const localTs = local.atualizadoEm || local.criadoEm || '';
-          const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
-          return localTs >= remTs ? local : rem;
-        });
-        merged = applyExcluidos(merged);
+        const merged = smartMerge(dados, remote.dados);
+        const hasPending = merged.some(d => d.pendingSync);
         dados = merged; persist();
-        const localOnlyCount = dados.filter(d => !remoteDados.find(r => r.id === d.id)).length;
-        if (localOnlyCount > 0) {
-          await fbWrite(fbRecord(merged));
-        }
-      } else if (dados.length > 0) {
-        dados = applyExcluidos(dados); persist();
+        if (hasPending) await fbWrite(fbRecord(merged));
+        markAllSynced();
+      } else if (dados.some(d => d.pendingSync)) {
         await fbWrite(fbRecord(dados));
+        markAllSynced();
       }
-    } else if (dados.length > 0) {
-      dados = applyExcluidos(dados); persist();
+    } else if (dados.some(d => d.pendingSync)) {
       await fbWrite(fbRecord(dados));
+      markAllSynced();
     }
     setDbStatus('ok');
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
@@ -917,6 +904,7 @@ function salvar() {
     anexos: [...tempFiles],
     situacao: '', origem: '', obsResposta: '', auxiliar: '',
     criadoEm: new Date().toISOString(),
+    pendingSync: true,
   };
   dados.push(novoItem);
   persistItem(novoItem);
@@ -1328,18 +1316,15 @@ async function deletarItem(id) {
   if (!d) return;
   const conf = confirm(`Excluir divergência NF ${d.nf} (${d.fornecedor})?\n\nEssa ação não pode ser desfeita.`);
   if (!conf) return;
-  excluidos.push({ id, deletedAt: new Date().toISOString() });
-  persistExcluidos();
-  dados = applyExcluidos(dados); persist();
+  dados = dados.filter(x => x.id !== id); persist();
   setDbStatus('sync');
   try {
     const remote = await fbRead();
-    mergeExcluidos(remote?.excluidos);
-    let merged = (remote?.dados || []);
-    merged = applyExcluidos(merged);
-    dados.forEach(d => { if (!merged.find(x => x.id === d.id)) merged.push(d); });
-    dados = applyExcluidos(merged); persist();
-    await fbWrite(fbRecord(dados));
+    const remoteDados = (remote?.dados || []).filter(x => x.id !== id);
+    const merged = smartMerge(dados, remoteDados);
+    dados = merged; persist();
+    await fbWrite(fbRecord(merged));
+    markAllSynced();
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); toast('⚠️ Erro ao excluir: ' + e.message, 'err'); }
   renderHistorico();
@@ -1658,19 +1643,10 @@ function startRealTimeSync() {
         if (remote.config.auxiliares)  { AUXILIARES  = remote.config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
         if (remote.config.categorias)  { CATS        = remote.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
       }
-      mergeExcluidos(remote.excluidos);
       if (Array.isArray(remote.dados)) {
-        let merged = [...dados];
-        remote.dados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
-        merged = merged.map(local => {
-          const rem = remote.dados.find(x => x.id === local.id);
-          if (!rem) return local;
-          const localTs = local.atualizadoEm || local.criadoEm || '';
-          const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
-          return localTs >= remTs ? local : rem;
-        });
-        merged = applyExcluidos(merged);
+        const merged = smartMerge(dados, remote.dados);
         dados = merged; persist();
+        markAllSynced();
         renderAllDynamic(); renderDashboard(); updatePersonBadges();
       }
       setDbStatus('ok');
