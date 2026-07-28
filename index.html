@@ -553,21 +553,36 @@ function setDbStatus(state) {
   lbl.textContent = s.text;
 }
 
-async function fbRead() {
-  const res = await fetch(FB_URL + '/app.json', { cache: 'no-store' });
+// ─── Firebase: paths individuais por registro ─────────────
+// Cada item vive em /app/dados/{id}.json
+// DELETE real → propaga para todos via SSE imediatamente
+
+async function fbApiCall(path, method = 'GET', body = undefined) {
+  const opts = { method, cache: 'no-store' };
+  if (body !== undefined) {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(FB_URL + path, opts);
   if (!res.ok) throw new Error('FB_ERRO_' + res.status);
-  return await res.json(); // { dados: [...], config: {...} } ou null
+  return method === 'DELETE' ? null : await res.json();
 }
 
-async function fbWrite(record) {
-  const res = await fetch(FB_URL + '/app.json', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(record),
-    cache: 'no-store'
-  });
-  if (!res.ok) throw new Error('FB_ERRO_' + res.status);
-  return await res.json();
+async function fbSaveItem(d) {
+  const { pendingSync, ...clean } = d;
+  await fbApiCall('/app/dados/' + d.id + '.json', 'PUT', clean);
+}
+async function fbDeleteItem(id) {
+  await fbApiCall('/app/dados/' + id + '.json', 'DELETE');
+}
+async function fbReadAll() {
+  const json = await fbApiCall('/app.json');
+  if (!json) return { dados: [], config: null };
+  const dadosObj = json.dados || {};
+  return {
+    dados: Object.values(dadosObj).filter(Boolean),
+    config: json.config || null
+  };
 }
 
 // ═══ CONFIG ════════════════════════════════════════════
@@ -580,10 +595,7 @@ async function persistConfig() {
   localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES));
   localStorage.setItem('cfg_cats', JSON.stringify(CATS));
   try {
-    const remote = await fbRead();
-    const record = remote || { dados: dados, config: {} };
-    record.config = { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS };
-    await fbWrite(record);
+    await fbApiCall('/app/config.json', 'PUT', { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS });
   } catch(e) { console.error('persistConfig error:', e); }
 }
 
@@ -602,50 +614,14 @@ function persist() {
   localStorage.setItem('div_v3', JSON.stringify(dados));
 }
 
-// Mescla arrays local + remoto.
-// Regra: item só no local → mantém SE for pendingSync (criado offline, ainda não salvo).
-//        item só no remoto → adiciona ao local.
-//        item nos dois → usa o mais recente pelo timestamp.
-function smartMerge(localArr, remoteArr) {
-  let merged = [...remoteArr];
-  localArr.forEach(local => {
-    const remIdx = merged.findIndex(r => r.id === local.id);
-    if (remIdx === -1) {
-      if (local.pendingSync) merged.push(local); // novo item local, ainda não foi pro Firebase
-      // se não tem pendingSync e não está no remoto → foi excluído por outra pessoa, não reinsere
-    } else {
-      const localTs = local.atualizadoEm || local.criadoEm || '';
-      const remTs   = merged[remIdx].atualizadoEm || merged[remIdx].criadoEm || '';
-      if (localTs > remTs) merged[remIdx] = local;
-    }
-  });
-  return merged;
-}
-
-function markAllSynced() {
-  dados = dados.map(d => { const { pendingSync, ...rest } = d; return rest; });
-  persist();
-}
-
-function fbRecord(dadosMerged) {
-  // Remove pendingSync antes de gravar no Firebase
-  const clean = dadosMerged.map(d => { const { pendingSync, ...rest } = d; return rest; });
-  return { dados: clean, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } };
-}
-
-async function mergeAndSave() {
-  const remote = await fbRead();
-  const merged = smartMerge(dados, remote?.dados || []);
-  dados = merged; persist();
-  await fbWrite(fbRecord(merged));
-  markAllSynced();
-}
-
 async function persistItem(d) {
   persist();
   setDbStatus('sync');
   try {
-    await mergeAndSave();
+    await fbSaveItem(d);
+    // Atualiza local removendo pendingSync
+    const idx = dados.findIndex(x => x.id === d.id);
+    if (idx !== -1) { const { pendingSync, ...clean } = dados[idx]; dados[idx] = clean; persist(); }
     setDbStatus('ok');
     toast('☁️ Salvo!', 'ok');
   } catch(e) {
@@ -658,12 +634,7 @@ async function deleteItem(id) {
   dados = dados.filter(x => x.id !== id); persist();
   setDbStatus('sync');
   try {
-    const remote = await fbRead();
-    const remoteDados = (remote?.dados || []).filter(x => x.id !== id);
-    const merged = smartMerge(dados, remoteDados);
-    dados = merged; persist();
-    await fbWrite(fbRecord(merged));
-    markAllSynced();
+    await fbDeleteItem(id); // DELETE real no Firebase — propaga para todos via SSE
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); toast('⚠️ Erro ao excluir: ' + e.message, 'err'); }
   renderHistorico(); renderDashboard(); updatePersonBadges();
@@ -673,32 +644,20 @@ async function deleteItem(id) {
 async function syncFromFB() {
   setDbStatus('sync');
   try {
-    const remote = await fbRead();
-    if (remote) {
-      if (remote.config) {
-        if (remote.config.compradores) { COMPRADORES = remote.config.compradores; localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES)); }
-        if (remote.config.auxiliares)  { AUXILIARES  = remote.config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
-        if (remote.config.categorias)  { CATS        = remote.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
-      }
-      if (Array.isArray(remote.dados)) {
-        const merged = smartMerge(dados, remote.dados);
-        const hasPending = merged.some(d => d.pendingSync);
-        dados = merged; persist();
-        if (hasPending) await fbWrite(fbRecord(merged));
-        markAllSynced();
-      } else if (dados.some(d => d.pendingSync)) {
-        await fbWrite(fbRecord(dados));
-        markAllSynced();
-      }
-    } else if (dados.some(d => d.pendingSync)) {
-      await fbWrite(fbRecord(dados));
-      markAllSynced();
+    const { dados: remoteDados, config } = await fbReadAll();
+    if (config) {
+      if (config.compradores) { COMPRADORES = config.compradores; localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES)); }
+      if (config.auxiliares)  { AUXILIARES  = config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
+      if (config.categorias)  { CATS        = config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
     }
+    // Remoto é autoritativo — mantém apenas itens locais que ainda não foram ao Firebase
+    const pendingLocais = dados.filter(d => d.pendingSync);
+    dados = [...remoteDados];
+    pendingLocais.forEach(p => { if (!dados.find(x => x.id === p.id)) dados.push(p); });
+    persist();
     setDbStatus('ok');
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
-    renderAllDynamic();
-    renderDashboard();
-    updatePersonBadges();
+    renderAllDynamic(); renderDashboard(); updatePersonBadges();
   } catch(e) {
     setDbStatus('error');
     toast('Erro ao conectar ao banco. Usando dados locais.', 'warn');
@@ -1319,12 +1278,7 @@ async function deletarItem(id) {
   dados = dados.filter(x => x.id !== id); persist();
   setDbStatus('sync');
   try {
-    const remote = await fbRead();
-    const remoteDados = (remote?.dados || []).filter(x => x.id !== id);
-    const merged = smartMerge(dados, remoteDados);
-    dados = merged; persist();
-    await fbWrite(fbRecord(merged));
-    markAllSynced();
+    await fbDeleteItem(id);
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); toast('⚠️ Erro ao excluir: ' + e.message, 'err'); }
   renderHistorico();
@@ -1628,31 +1582,67 @@ tickClock();
 setInterval(tickClock, 30000);
 
 // ═══ TEMPO REAL (SSE) ══════════════════════════════════
+function applySSEPayload(path, data) {
+  if (path === '/') {
+    // Carga inicial completa ou reset
+    if (!data) { dados = []; persist(); return; }
+    if (data.config) {
+      if (data.config.compradores) { COMPRADORES = data.config.compradores; localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES)); }
+      if (data.config.auxiliares)  { AUXILIARES  = data.config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
+      if (data.config.categorias)  { CATS        = data.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
+    }
+    if (data.dados) {
+      const remoteDados = Object.values(data.dados).filter(Boolean);
+      const pending = dados.filter(d => d.pendingSync);
+      dados = [...remoteDados];
+      pending.forEach(p => { if (!dados.find(x => x.id === p.id)) dados.push(p); });
+    } else {
+      const pending = dados.filter(d => d.pendingSync);
+      dados = [...pending];
+    }
+  } else if (path.startsWith('/dados/')) {
+    const idStr = path.split('/')[2];
+    if (data === null) {
+      // EXCLUSÃO — remove imediatamente, nunca volta
+      dados = dados.filter(x => String(x.id) !== String(idStr));
+    } else {
+      // Adição ou atualização
+      const idx = dados.findIndex(x => String(x.id) === String(idStr));
+      if (idx === -1) dados.push(data);
+      else dados[idx] = data;
+    }
+  } else if (path === '/config' && data) {
+    if (data.compradores) { COMPRADORES = data.compradores; localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES)); }
+    if (data.auxiliares)  { AUXILIARES  = data.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
+    if (data.categorias)  { CATS        = data.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
+  }
+  persist();
+  renderAllDynamic(); renderDashboard(); updatePersonBadges();
+  setDbStatus('ok');
+}
+
 function startRealTimeSync() {
   if (typeof EventSource === 'undefined') { syncFromFB(); return; }
   const src = new EventSource(FB_URL + '/app.json');
   src.onopen = () => setDbStatus('ok');
-  src.onerror = () => { setDbStatus('error'); };
+  src.onerror = () => setDbStatus('error');
   src.addEventListener('put', function(e) {
     try {
       const payload = JSON.parse(e.data);
-      if (!payload || payload.data === null) return;
-      const remote = payload.data;
-      if (remote.config) {
-        if (remote.config.compradores) { COMPRADORES = remote.config.compradores; localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES)); }
-        if (remote.config.auxiliares)  { AUXILIARES  = remote.config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
-        if (remote.config.categorias)  { CATS        = remote.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
-      }
-      if (Array.isArray(remote.dados)) {
-        const merged = smartMerge(dados, remote.dados);
-        dados = merged; persist();
-        markAllSynced();
-        renderAllDynamic(); renderDashboard(); updatePersonBadges();
-      }
-      setDbStatus('ok');
+      if (!payload) return;
+      applySSEPayload(payload.path || '/', payload.data);
     } catch(err) { console.error('SSE error', err); }
   });
-  src.addEventListener('patch', () => syncFromFB());
+  src.addEventListener('patch', function(e) {
+    try {
+      const payload = JSON.parse(e.data);
+      if (!payload || !payload.data) return;
+      // patch traz objeto com múltiplos campos atualizados
+      Object.entries(payload.data).forEach(([key, val]) => {
+        applySSEPayload((payload.path || '') + '/' + key, val);
+      });
+    } catch(err) { console.error('SSE patch error', err); }
+  });
 }
 
 // ═══ INIT ══════════════════════════════════════════════
