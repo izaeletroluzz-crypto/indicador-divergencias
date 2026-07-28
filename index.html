@@ -708,17 +708,29 @@ async function syncFromJB() {
         if (remote.config.categorias)  { CATS        = remote.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
       }
       if (Array.isArray(remote.dados)) {
+        const remoteDados = remote.dados;
         let merged = [...dados];
-        remote.dados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
+        remoteDados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
         merged = merged.map(local => {
-          const rem = remote.dados.find(x => x.id === local.id);
+          const rem = remoteDados.find(x => x.id === local.id);
           if (!rem) return local;
           const localTs = local.atualizadoEm || local.criadoEm || '';
           const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
           return localTs >= remTs ? local : rem;
         });
         dados = merged; persist();
+        // Se há dados locais que ainda não estão no JSONBin, envia agora
+        const localOnlyCount = dados.filter(d => !remoteDados.find(r => r.id === d.id)).length;
+        if (localOnlyCount > 0) {
+          await jbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+        }
+      } else if (dados.length > 0) {
+        // JSONBin sem dados mas há dados locais — envia tudo
+        await jbWrite({ dados: dados, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
       }
+    } else if (dados.length > 0) {
+      // Bin vazio mas há dados locais — envia tudo
+      await jbWrite({ dados: dados, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
     }
     setDbStatus('ok');
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
