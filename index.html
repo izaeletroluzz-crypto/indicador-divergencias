@@ -581,8 +581,9 @@ async function persistConfig() {
   localStorage.setItem('cfg_cats', JSON.stringify(CATS));
   try {
     const remote = await fbRead();
-    const record = remote || { dados: dados, config: {} };
+    const record = remote || { dados: dados, config: {}, excluidos: [] };
     record.config = { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS };
+    record.excluidos = excluidos;
     await fbWrite(record);
   } catch(e) { console.error('persistConfig error:', e); }
 }
@@ -598,12 +599,29 @@ let editingId  = null;
 let rmSit = '', rmOrig = '', auxOrig = '';
 let currentPerson = null;
 
+let excluidos = JSON.parse(localStorage.getItem('excluidos') || '[]'); // [{id, deletedAt}]
+
 function persist() {
   localStorage.setItem('div_v3', JSON.stringify(dados));
+}
+function persistExcluidos() {
+  localStorage.setItem('excluidos', JSON.stringify(excluidos));
+}
+function mergeExcluidos(remoteExc) {
+  if (!Array.isArray(remoteExc)) return;
+  remoteExc.forEach(e => { if (!excluidos.find(x => x.id === e.id)) excluidos.push(e); });
+  persistExcluidos();
+}
+function applyExcluidos(arr) {
+  return arr.filter(d => !excluidos.find(e => e.id === d.id));
+}
+function fbRecord(dadosMerged) {
+  return { dados: dadosMerged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS }, excluidos };
 }
 
 async function mergeAndSave() {
   const remote = await fbRead();
+  mergeExcluidos(remote?.excluidos);
   let merged = [...dados];
   if (remote && Array.isArray(remote.dados)) {
     remote.dados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
@@ -614,9 +632,10 @@ async function mergeAndSave() {
       const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
       return localTs >= remTs ? local : rem;
     });
-    dados = merged; persist();
   }
-  await fbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+  merged = applyExcluidos(merged);
+  dados = merged; persist();
+  await fbWrite(fbRecord(merged));
 }
 
 async function persistItem(d) {
@@ -633,16 +652,19 @@ async function persistItem(d) {
 }
 
 async function deleteItem(id) {
-  dados = dados.filter(x => x.id !== id);
-  persist();
+  excluidos.push({ id, deletedAt: new Date().toISOString() });
+  persistExcluidos();
+  dados = applyExcluidos(dados); persist();
   setDbStatus('sync');
   try {
     const remote = await fbRead();
-    const remoteData = (remote?.dados || []).filter(x => x.id !== id);
-    const merged = [...dados];
-    remoteData.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
-    dados = merged; persist();
-    await fbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+    mergeExcluidos(remote?.excluidos);
+    let merged = (remote?.dados || []);
+    merged = applyExcluidos(merged);
+    // merge com local
+    dados.forEach(d => { if (!merged.find(x => x.id === d.id)) merged.push(d); });
+    dados = applyExcluidos(merged); persist();
+    await fbWrite(fbRecord(dados));
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); toast('⚠️ Erro ao excluir: ' + e.message, 'err'); }
   renderHistorico(); renderDashboard(); updatePersonBadges();
@@ -659,6 +681,7 @@ async function syncFromFB() {
         if (remote.config.auxiliares)  { AUXILIARES  = remote.config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
         if (remote.config.categorias)  { CATS        = remote.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
       }
+      mergeExcluidos(remote.excluidos);
       if (Array.isArray(remote.dados)) {
         const remoteDados = remote.dados;
         let merged = [...dados];
@@ -670,17 +693,19 @@ async function syncFromFB() {
           const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
           return localTs >= remTs ? local : rem;
         });
+        merged = applyExcluidos(merged);
         dados = merged; persist();
-        // Se há dados locais que não estão no Firebase, envia agora
         const localOnlyCount = dados.filter(d => !remoteDados.find(r => r.id === d.id)).length;
         if (localOnlyCount > 0) {
-          await fbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+          await fbWrite(fbRecord(merged));
         }
       } else if (dados.length > 0) {
-        await fbWrite({ dados: dados, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+        dados = applyExcluidos(dados); persist();
+        await fbWrite(fbRecord(dados));
       }
     } else if (dados.length > 0) {
-      await fbWrite({ dados: dados, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+      dados = applyExcluidos(dados); persist();
+      await fbWrite(fbRecord(dados));
     }
     setDbStatus('ok');
     if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
@@ -1303,16 +1328,18 @@ async function deletarItem(id) {
   if (!d) return;
   const conf = confirm(`Excluir divergência NF ${d.nf} (${d.fornecedor})?\n\nEssa ação não pode ser desfeita.`);
   if (!conf) return;
-  dados = dados.filter(x => x.id !== id);
-  persist();
+  excluidos.push({ id, deletedAt: new Date().toISOString() });
+  persistExcluidos();
+  dados = applyExcluidos(dados); persist();
   setDbStatus('sync');
   try {
     const remote = await fbRead();
-    const remoteData = (remote?.dados || []).filter(x => x.id !== id);
-    const merged = [...dados];
-    remoteData.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
-    dados = merged; persist();
-    await fbWrite({ dados: merged, config: { compradores: COMPRADORES, auxiliares: AUXILIARES, categorias: CATS } });
+    mergeExcluidos(remote?.excluidos);
+    let merged = (remote?.dados || []);
+    merged = applyExcluidos(merged);
+    dados.forEach(d => { if (!merged.find(x => x.id === d.id)) merged.push(d); });
+    dados = applyExcluidos(merged); persist();
+    await fbWrite(fbRecord(dados));
     setDbStatus('ok');
   } catch(e) { setDbStatus('error'); toast('⚠️ Erro ao excluir: ' + e.message, 'err'); }
   renderHistorico();
@@ -1631,6 +1658,7 @@ function startRealTimeSync() {
         if (remote.config.auxiliares)  { AUXILIARES  = remote.config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
         if (remote.config.categorias)  { CATS        = remote.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
       }
+      mergeExcluidos(remote.excluidos);
       if (Array.isArray(remote.dados)) {
         let merged = [...dados];
         remote.dados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
@@ -1641,6 +1669,7 @@ function startRealTimeSync() {
           const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
           return localTs >= remTs ? local : rem;
         });
+        merged = applyExcluidos(merged);
         dados = merged; persist();
         renderAllDynamic(); renderDashboard(); updatePersonBadges();
       }
