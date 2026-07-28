@@ -1615,15 +1615,48 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 30000);
 
+// ═══ TEMPO REAL (SSE) ══════════════════════════════════
+function startRealTimeSync() {
+  if (typeof EventSource === 'undefined') { syncFromFB(); return; }
+  const src = new EventSource(FB_URL + '/app.json');
+  src.onopen = () => setDbStatus('ok');
+  src.onerror = () => { setDbStatus('error'); };
+  src.addEventListener('put', function(e) {
+    try {
+      const payload = JSON.parse(e.data);
+      if (!payload || payload.data === null) return;
+      const remote = payload.data;
+      if (remote.config) {
+        if (remote.config.compradores) { COMPRADORES = remote.config.compradores; localStorage.setItem('cfg_comp', JSON.stringify(COMPRADORES)); }
+        if (remote.config.auxiliares)  { AUXILIARES  = remote.config.auxiliares;  localStorage.setItem('cfg_aux',  JSON.stringify(AUXILIARES)); }
+        if (remote.config.categorias)  { CATS        = remote.config.categorias;  localStorage.setItem('cfg_cats', JSON.stringify(CATS)); }
+      }
+      if (Array.isArray(remote.dados)) {
+        let merged = [...dados];
+        remote.dados.forEach(r => { if (!merged.find(x => x.id === r.id)) merged.push(r); });
+        merged = merged.map(local => {
+          const rem = remote.dados.find(x => x.id === local.id);
+          if (!rem) return local;
+          const localTs = local.atualizadoEm || local.criadoEm || '';
+          const remTs   = rem.atualizadoEm   || rem.criadoEm   || '';
+          return localTs >= remTs ? local : rem;
+        });
+        dados = merged; persist();
+        renderAllDynamic(); renderDashboard(); updatePersonBadges();
+      }
+      setDbStatus('ok');
+    } catch(err) { console.error('SSE error', err); }
+  });
+  src.addEventListener('patch', () => syncFromFB());
+}
+
 // ═══ INIT ══════════════════════════════════════════════
 // Carrega dados locais primeiro (renderização imediata)
 if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
 renderAllDynamic();
 renderDashboard();
-// Sincroniza com Firebase
-syncFromFB();
-// Auto-sincroniza a cada 2 minutos
-setInterval(syncFromFB, 2 * 60 * 1000);
+// Inicia sincronização em tempo real
+startRealTimeSync();
 </script>
 </body>
 </html>
