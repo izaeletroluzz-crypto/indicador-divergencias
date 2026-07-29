@@ -77,11 +77,6 @@ header .hdr-sub{font-size:.72rem;color:#64748b;font-weight:400;margin-top:2px}
 #page-pessoa tr.tr-done td .badge:not(.b-realizado){filter:grayscale(1)}
 #page-pessoa tr.tr-done td .b-realizado{opacity:1;filter:none}
 
-/* SLA VENCIDO ROWS */
-tr.tr-sla td{background:#fff0f0;}
-tr.tr-sla:hover td{background:#ffe4e4;}
-tr.tr-sla-done td{background:#fff5f5;opacity:.7;}
-tr.tr-sla-done:hover td{background:#ffe4e4;opacity:.85;}
 
 /* TABLE */
 .tbl-wrap{background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb}
@@ -437,7 +432,7 @@ textarea{resize:vertical;min-height:66px}
       <table>
         <thead><tr>
           <th>Data</th><th>NF</th><th>Comprador</th><th>Fornecedor</th><th>Filial</th>
-          <th>Categoria</th><th>Origem</th><th>Situação</th><th>Auxiliar</th><th style="text-align:center;">✓</th><th>Registrado por</th><th>Registrado em</th><th>Resolvido em</th>
+          <th>Categoria</th><th>Origem</th><th>Situação</th><th>Auxiliar</th><th style="text-align:center;">✓</th><th>Registrado por</th><th style="text-align:center;">⚠️</th><th>Registrado em</th><th>Resolvido em</th>
         </tr></thead>
         <tbody id="h-body"></tbody>
       </table>
@@ -994,7 +989,7 @@ function renderPsTable(name) {
 
     const done = d.situacao === 'REALIZADO';
     const slaVenc = !done && ((new Date() - new Date(d.criadoEm||d.data)) / (1000*60*60)) > 24;
-    return `<tr class="${done?'tr-done':slaVenc?'tr-sla':''}">
+    return `<tr class="${done?'tr-done':''}">
       <td>${fmtDate(d.data)}</td>
       <td><strong>${d.nf}</strong></td>
       <td style="font-size:.82rem;">${d.fornecedor}</td>
@@ -1308,15 +1303,16 @@ function renderHistorico() {
     const isConf = !!d.conferido;
     const isSlaVenc = !isDone && ((new Date() - new Date(d.criadoEm||d.data)) / (1000*60*60)) > 24;
     const isSlaVencDone = isDone && d.atualizadoEm && ((new Date(d.atualizadoEm) - new Date(d.criadoEm||d.data)) / (1000*60*60)) > 24;
-    return`<tr class="${isDone?'tr-done':''}${isSlaVenc?' tr-sla':''}${isSlaVencDone?' tr-sla-done':''}">
+    return`<tr class="${isDone?'tr-done':''}">
       <td>${fmtDate(d.data)}</td><td>${d.nf}</td><td>${d.destino}</td><td>${d.fornecedor}</td><td>${d.filial||'—'}</td>
       <td style="font-size:.79rem;">${catLbl}</td><td>${origBdg}</td>
       <td><span class="badge b-${sitKey==='pend'?'pend':sitKey}">${sitLbl}</span></td>
       <td>${d.auxiliar||'—'}</td>
       <td style="text-align:center;"><input type="checkbox" class="hist-chk" ${isConf?'checked':''} onchange="toggleHistChk(${d.id},this.checked)" title="${isConf?'Desmarcar':'Marcar como conferido'}"></td>
       <td>${d.registradoPor}</td>
+      <td style="text-align:center;">${(isSlaVenc||isSlaVencDone)?'⚠️':''}</td>
       <td style="font-size:.75rem;white-space:nowrap;">${fmtDateTime(d.criadoEm)}</td>
-      <td style="font-size:.75rem;white-space:nowrap;">${isDone&&d.atualizadoEm?fmtDateTime(d.atualizadoEm)+(isSlaVencDone?' <span style="background:#fee2e2;color:#dc2626;font-size:.68rem;padding:1px 5px;border-radius:4px;font-weight:700;">⚠️ Atrasado</span>':''):'—'}</td>
+      <td style="font-size:.75rem;white-space:nowrap;">${isDone&&d.atualizadoEm?fmtDateTime(d.atualizadoEm):'—'}</td>
       <td style="text-align:center;"><button onclick="deletarItem(${d.id})" title="Excluir" style="background:none;border:none;cursor:pointer;font-size:1rem;opacity:.4;transition:opacity .15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4">🗑️</button></td>
     </tr>`;
   }).join('');
