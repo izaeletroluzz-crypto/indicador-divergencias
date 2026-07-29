@@ -435,7 +435,7 @@ textarea{resize:vertical;min-height:66px}
       <table>
         <thead><tr>
           <th>Data</th><th>NF</th><th>Comprador</th><th>Fornecedor</th><th>Filial</th>
-          <th>Categoria</th><th>Origem</th><th>Situação</th><th>Auxiliar</th><th>Registrado por</th><th>Registrado em</th><th style="text-align:center;">✓</th>
+          <th>Categoria</th><th>Origem</th><th>Situação</th><th>Auxiliar</th><th>Registrado por</th><th>Registrado em</th><th>Resolvido em</th><th style="text-align:center;">✓</th>
         </tr></thead>
         <tbody id="h-body"></tbody>
       </table>
@@ -1311,6 +1311,7 @@ function renderHistorico() {
       <td><span class="badge b-${sitKey==='pend'?'pend':sitKey}">${sitLbl}</span></td>
       <td>${d.auxiliar||'—'}</td><td>${d.registradoPor}</td>
       <td style="font-size:.75rem;white-space:nowrap;">${fmtDateTime(d.criadoEm)}</td>
+      <td style="font-size:.75rem;white-space:nowrap;">${isDone&&d.atualizadoEm?fmtDateTime(d.atualizadoEm):'—'}</td>
       <td style="text-align:center;"><input type="checkbox" class="hist-chk" ${isConf?'checked':''} onchange="toggleHistChk(${d.id},this.checked)" title="${isConf?'Desmarcar':'Marcar como conferido'}"></td>
       <td style="text-align:center;"><button onclick="deletarItem(${d.id})" title="Excluir" style="background:none;border:none;cursor:pointer;font-size:1rem;opacity:.4;transition:opacity .15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4">🗑️</button></td>
     </tr>`;
