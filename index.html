@@ -1649,7 +1649,11 @@ function startRealTimeSync() {
   if (typeof EventSource === 'undefined') { syncFromFB(); return; }
   const src = new EventSource(FB_URL + '/app.json');
   src.onopen = () => setDbStatus('ok');
-  src.onerror = () => setDbStatus('error');
+  src.onerror = () => {
+    setDbStatus('error');
+    // SSE falhou — tenta busca direta como fallback
+    setTimeout(() => syncFromFB(), 3000);
+  };
   src.addEventListener('put', function(e) {
     try {
       const payload = JSON.parse(e.data);
@@ -1661,7 +1665,6 @@ function startRealTimeSync() {
     try {
       const payload = JSON.parse(e.data);
       if (!payload || !payload.data) return;
-      // patch traz objeto com múltiplos campos atualizados
       Object.entries(payload.data).forEach(([key, val]) => {
         applySSEPayload((payload.path || '') + '/' + key, val);
       });
@@ -1670,7 +1673,11 @@ function startRealTimeSync() {
 }
 
 // ═══ INIT ══════════════════════════════════════════════
-// Carrega dados locais primeiro (renderização imediata)
 if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
 renderAllDynamic();
-ren
+renderDashboard();
+// Busca direta ao Firebase primeiro (garante dados mesmo se SSE demorar)
+syncFromFB().then(() => startRealTimeSync());
+</script>
+</body>
+</html>
