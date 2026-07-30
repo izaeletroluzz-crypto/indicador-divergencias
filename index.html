@@ -612,7 +612,18 @@ let rmSit = '', rmOrig = '', auxOrig = '';
 let currentPerson = null;
 
 function persist() {
-  localStorage.setItem('div_v3', JSON.stringify(dados));
+  try {
+    localStorage.setItem('div_v3', JSON.stringify(dados));
+  } catch(e) {
+    if (e.name === 'QuotaExceededError') {
+      // Cache local cheio — limpa e tenta salvar só os mais recentes
+      localStorage.removeItem('div_v3');
+      try {
+        const recentes = dados.slice(-100); // guarda só os 100 mais recentes
+        localStorage.setItem('div_v3', JSON.stringify(recentes));
+      } catch(_) { /* se ainda falhar, Firebase é a fonte de verdade */ }
+    }
+  }
 }
 
 async function persistItem(d) {
@@ -1662,9 +1673,4 @@ function startRealTimeSync() {
 // Carrega dados locais primeiro (renderização imediata)
 if (!CATS.some(c => c.toLowerCase() === 'outros')) { CATS.push('Outros'); persistConfig(); }
 renderAllDynamic();
-renderDashboard();
-// Inicia sincronização em tempo real
-startRealTimeSync();
-</script>
-</body>
-</html>
+ren
