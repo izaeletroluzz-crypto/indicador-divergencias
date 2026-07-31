@@ -981,7 +981,12 @@ function renderPsTable(name) {
   else if (sit) items = items.filter(d => d.situacao === sit);
   if (mes) items = items.filter(d => d.data.startsWith(mes));
   if (cat) items = items.filter(d => d.categoria === cat);
-  items.sort((a,b) => b.data.localeCompare(a.data));
+  items.sort((a,b) => {
+    const aPend = !a.situacao ? 0 : 1;
+    const bPend = !b.situacao ? 0 : 1;
+    if (aPend !== bPend) return aPend - bPend;   // sem resposta primeiro
+    return a.data.localeCompare(b.data);          // depois mais antigo primeiro
+  });
 
   const cnt = document.getElementById('ps-cnt');
   if (cnt) cnt.textContent = `${items.length} registro(s)`;
