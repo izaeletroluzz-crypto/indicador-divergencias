@@ -419,7 +419,7 @@ textarea{resize:vertical;min-height:66px}
     </div>
     <div class="fg"><label>Mês</label><input type="month" id="h-mes"></div>
     <div class="fg"><label>NF / Fornecedor</label><input type="text" id="h-busca" placeholder="Buscar..."></div>
-    <button class="btn btn-primary" onclick="renderHistorico()">Filtrar</button>
+    <button class="btn btn-primary" onclick="saveHF();renderHistorico()">Filtrar</button>
     <button class="btn btn-ghost" onclick="clearHF()">Limpar</button>
     <button class="btn btn-green" onclick="exportCSV()">⬇ CSV</button>
   </div>
@@ -807,7 +807,7 @@ function showMain(id) {
   document.querySelectorAll('#main-nav button').forEach((b,i) => b.classList.toggle('active', ids[i]===id));
   document.querySelectorAll('.ps-btn').forEach(b => b.classList.remove('active'));
   if (id === 'dashboard') renderDashboard();
-  if (id === 'historico') renderHistorico();
+  if (id === 'historico') { loadHF(); renderHistorico(); }
   if (id === 'config') renderConfigPage();
 }
 
@@ -941,6 +941,12 @@ function renderPersonPage(name) {
         </select>
       </div>
       <div class="fg"><label>Mês</label><input type="month" id="ps-mes" onchange="renderPsTable('${name}')"></div>
+      <div class="fg"><label>Categoria</label>
+        <select id="ps-cat" onchange="renderPsTable('${name}')">
+          <option value="">Todas</option>
+          ${CATS.map(c=>`<option value="${c}">${c}</option>`).join('')}
+        </select>
+      </div>
     </div>
 
     <div class="tbl-wrap">
@@ -970,9 +976,11 @@ function renderPsTable(name) {
   const mes = document.getElementById('ps-mes')?.value || '';
   let items = getItems(name);
 
+  const cat = document.getElementById('ps-cat')?.value || '';
   if (sit === 'NONE') items = items.filter(d => !d.situacao);
   else if (sit) items = items.filter(d => d.situacao === sit);
   if (mes) items = items.filter(d => d.data.startsWith(mes));
+  if (cat) items = items.filter(d => d.categoria === cat);
   items.sort((a,b) => b.data.localeCompare(a.data));
 
   const cnt = document.getElementById('ps-cnt');
@@ -1242,9 +1250,34 @@ function closeImg(e, force) {
 }
 
 // ═══ HISTÓRICO ═════════════════════════════════════════
+function saveHF() {
+  const f = {
+    dest:  document.getElementById('h-dest').value,
+    cat:   document.getElementById('h-cat').value,
+    orig:  document.getElementById('h-orig').value,
+    sit:   document.getElementById('h-sit').value,
+    mes:   document.getElementById('h-mes').value,
+    busca: document.getElementById('h-busca').value,
+  };
+  localStorage.setItem('hf_filtros', JSON.stringify(f));
+}
+
+function loadHF() {
+  try {
+    const f = JSON.parse(localStorage.getItem('hf_filtros') || '{}');
+    if (f.dest)  document.getElementById('h-dest').value  = f.dest;
+    if (f.cat)   document.getElementById('h-cat').value   = f.cat;
+    if (f.orig)  document.getElementById('h-orig').value  = f.orig;
+    if (f.sit)   document.getElementById('h-sit').value   = f.sit;
+    if (f.mes)   document.getElementById('h-mes').value   = f.mes;
+    if (f.busca) document.getElementById('h-busca').value = f.busca;
+  } catch(_) {}
+}
+
 function clearHF() {
   ['h-dest','h-cat','h-orig','h-sit'].forEach(id=>document.getElementById(id).value='');
   ['h-mes','h-busca'].forEach(id=>document.getElementById(id).value='');
+  localStorage.removeItem('hf_filtros');
   renderHistorico();
 }
 
