@@ -419,6 +419,15 @@ textarea{resize:vertical;min-height:66px}
     </div>
     <div class="fg"><label>Mês</label><input type="month" id="h-mes"></div>
     <div class="fg"><label>NF / Fornecedor</label><input type="text" id="h-busca" placeholder="Buscar..."></div>
+    <div class="fg"><label>Ordenar por</label>
+      <select id="h-order">
+        <option value="data-desc">Data (mais recente)</option>
+        <option value="data-asc">Data (mais antigo)</option>
+        <option value="pend-first">Sem resposta primeiro</option>
+        <option value="nf-asc">NF (crescente)</option>
+        <option value="fornecedor-asc">Fornecedor (A-Z)</option>
+      </select>
+    </div>
     <button class="btn btn-primary" onclick="saveHF();renderHistorico()">Filtrar</button>
     <button class="btn btn-ghost" onclick="clearHF()">Limpar</button>
     <button class="btn btn-green" onclick="exportCSV()">⬇ CSV</button>
@@ -1263,6 +1272,7 @@ function saveHF() {
     sit:   document.getElementById('h-sit').value,
     mes:   document.getElementById('h-mes').value,
     busca: document.getElementById('h-busca').value,
+    order: document.getElementById('h-order').value,
   };
   localStorage.setItem('hf_filtros', JSON.stringify(f));
 }
@@ -1276,12 +1286,14 @@ function loadHF() {
     if (f.sit)   document.getElementById('h-sit').value   = f.sit;
     if (f.mes)   document.getElementById('h-mes').value   = f.mes;
     if (f.busca) document.getElementById('h-busca').value = f.busca;
+    if (f.order) document.getElementById('h-order').value = f.order;
   } catch(_) {}
 }
 
 function clearHF() {
-  ['h-dest','h-cat','h-orig','h-sit'].forEach(id=>document.getElementById(id).value='');
+  ['h-dest','h-cat','h-orig','h-sit','h-order'].forEach(id=>document.getElementById(id).value='');
   ['h-mes','h-busca'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('h-order').value = 'data-desc';
   localStorage.removeItem('hf_filtros');
   renderHistorico();
 }
@@ -1293,6 +1305,7 @@ function getHistData() {
   const sit   = document.getElementById('h-sit').value;
   const mes   = document.getElementById('h-mes').value;
   const busca = document.getElementById('h-busca').value.toLowerCase();
+  const order = document.getElementById('h-order')?.value || 'data-desc';
   return dados.filter(d=>{
     if (dest && d.destino!==dest && d.auxiliar!==dest) return false;
     if (cat  && d.categoria!==cat) return false;
@@ -1303,6 +1316,15 @@ function getHistData() {
     if (busca && !d.nf.includes(busca) && !d.fornecedor.toLowerCase().includes(busca)) return false;
     return true;
   }).sort((a,b)=>{
+    if (order === 'pend-first') {
+      const pa = !a.situacao ? 0 : 1, pb = !b.situacao ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return a.data.localeCompare(b.data);
+    }
+    if (order === 'data-asc')       return a.data.localeCompare(b.data);
+    if (order === 'nf-asc')         return String(a.nf).localeCompare(String(b.nf), undefined, {numeric:true});
+    if (order === 'fornecedor-asc') return a.fornecedor.localeCompare(b.fornecedor);
+    // data-desc (padrão) — conferidos por último
     const chkA = a.conferido ? 1 : 0;
     const chkB = b.conferido ? 1 : 0;
     if (chkA !== chkB) return chkA - chkB;
