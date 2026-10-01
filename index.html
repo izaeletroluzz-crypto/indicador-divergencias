@@ -406,6 +406,9 @@ textarea{resize:vertical;min-height:66px}
     <div class="fg"><label>Categoria</label>
       <select id="h-cat"><option value="">Todas</option></select>
     </div>
+    <div class="fg"><label>Filial</label>
+      <select id="h-filial"><option value="">Todas</option></select>
+    </div>
     <div class="fg"><label>Origem</label>
       <select id="h-orig"><option value="">Todas</option><option value="EXTERNO">Externo</option><option value="INTERNO">Interno</option></select>
     </div>
@@ -754,6 +757,14 @@ function renderCatGrid() {
     let html = '<option value="">Todas</option>';
     CATS.forEach(c => html += `<option>${c}</option>`);
     hc.innerHTML = html;
+  }
+  // History filial select — populado dinamicamente com filiais existentes nos dados
+  const hf = document.getElementById('h-filial');
+  if (hf) {
+    const filiais = [...new Set(dados.map(d => d.filial).filter(Boolean))].sort();
+    let html = '<option value="">Todas</option>';
+    filiais.forEach(f => html += `<option>${f}</option>`);
+    hf.innerHTML = html;
   }
 }
 
@@ -1272,7 +1283,8 @@ function saveHF() {
     sit:   document.getElementById('h-sit').value,
     mes:   document.getElementById('h-mes').value,
     busca: document.getElementById('h-busca').value,
-    order: document.getElementById('h-order').value,
+    order:  document.getElementById('h-order').value,
+    filial: document.getElementById('h-filial').value,
   };
   localStorage.setItem('hf_filtros', JSON.stringify(f));
 }
@@ -1286,12 +1298,13 @@ function loadHF() {
     if (f.sit)   document.getElementById('h-sit').value   = f.sit;
     if (f.mes)   document.getElementById('h-mes').value   = f.mes;
     if (f.busca) document.getElementById('h-busca').value = f.busca;
-    if (f.order) document.getElementById('h-order').value = f.order;
+    if (f.order)  document.getElementById('h-order').value  = f.order;
+    if (f.filial) document.getElementById('h-filial').value = f.filial;
   } catch(_) {}
 }
 
 function clearHF() {
-  ['h-dest','h-cat','h-orig','h-sit','h-order'].forEach(id=>document.getElementById(id).value='');
+  ['h-dest','h-cat','h-filial','h-orig','h-sit','h-order'].forEach(id=>document.getElementById(id).value='');
   ['h-mes','h-busca'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('h-order').value = 'data-desc';
   localStorage.removeItem('hf_filtros');
@@ -1305,11 +1318,13 @@ function getHistData() {
   const sit   = document.getElementById('h-sit').value;
   const mes   = document.getElementById('h-mes').value;
   const busca = document.getElementById('h-busca').value.toLowerCase();
+  const filial= document.getElementById('h-filial')?.value || '';
   const order = document.getElementById('h-order')?.value || 'data-desc';
   return dados.filter(d=>{
-    if (dest && d.destino!==dest && d.auxiliar!==dest) return false;
-    if (cat  && d.categoria!==cat) return false;
-    if (orig && d.origem!==orig) return false;
+    if (dest   && d.destino!==dest && d.auxiliar!==dest) return false;
+    if (cat    && d.categoria!==cat) return false;
+    if (filial && (d.filial||'')!==filial) return false;
+    if (orig   && d.origem!==orig) return false;
     if (sit==='NONE' && d.situacao) return false;
     if (sit && sit!=='NONE' && d.situacao!==sit) return false;
     if (mes  && !d.data.startsWith(mes)) return false;
@@ -1392,8 +1407,14 @@ function renderHistorico() {
 function exportCSV() {
   const list=getHistData();
   if (!list.length){toast('Nenhum dado para exportar.','warn');return;}
-  const hdr=['Data','NF','Destino','Fornecedor','Filial','Categoria','Desc.Outros','Origem','Situação','Auxiliar','Registrado por','Obs'];
-  const rows=list.map(d=>[d.data,d.nf,d.destino,d.fornecedor,d.filial||'',d.categoria,d.descOutros||'',d.origem||'',d.situacao||'',d.auxiliar||'',d.registradoPor,`"${(d.obs||'').replace(/"/g,'""')}"`].join(';'));
+  const hdr=['Data','NF','Destino','Fornecedor','Filial','Categoria','Desc.Outros','Origem','Situação','Auxiliar','Registrado por','Registrado em','Resolvido em','Obs'];
+  const rows=list.map(d=>[
+    d.data,d.nf,d.destino,d.fornecedor,d.filial||'',d.categoria,d.descOutros||'',
+    d.origem||'',d.situacao||'',d.auxiliar||'',d.registradoPor,
+    fmtDateTime(d.criadoEm),
+    d.situacao==='REALIZADO'&&d.atualizadoEm?fmtDateTime(d.atualizadoEm):'',
+    `"${(d.obs||'').replace(/"/g,'""')}"`
+  ].join(';'));
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob(['﻿'+[hdr.join(';'),...rows].join('\n')],{type:'text/csv;charset=utf-8;'}));
   a.download=`divergencias_${today()}.csv`;
