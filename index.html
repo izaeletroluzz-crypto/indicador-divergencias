@@ -420,6 +420,13 @@ textarea{resize:vertical;min-height:66px}
         <option value="REALIZADO">Realizado</option>
       </select>
     </div>
+    <div class="fg"><label>Finalizado</label>
+      <select id="h-conf">
+        <option value="">Todos</option>
+        <option value="sim">Sim</option>
+        <option value="nao">Não</option>
+      </select>
+    </div>
     <div class="fg"><label>Mês</label><input type="month" id="h-mes"></div>
     <div class="fg"><label>NF / Fornecedor</label><input type="text" id="h-busca" placeholder="Buscar..."></div>
     <div class="fg"><label>Ordenar por</label>
@@ -444,7 +451,7 @@ textarea{resize:vertical;min-height:66px}
       <table>
         <thead><tr>
           <th>Data</th><th>NF</th><th>Comprador</th><th>Fornecedor</th><th>Filial</th>
-          <th>Categoria</th><th>Origem</th><th>Situação</th><th>Auxiliar</th><th style="text-align:center;">✓</th><th>Registrado por</th><th style="text-align:center;">⚠️</th><th>Registrado em</th><th>Resolvido em</th>
+          <th>Categoria</th><th>Origem</th><th>Situação</th><th>Auxiliar</th><th style="text-align:center;">Finalizado</th><th>Registrado por</th><th style="text-align:center;">⚠️</th><th>Registrado em</th><th>Resolvido em</th>
         </tr></thead>
         <tbody id="h-body"></tbody>
       </table>
@@ -1285,6 +1292,7 @@ function saveHF() {
     busca: document.getElementById('h-busca').value,
     order:  document.getElementById('h-order').value,
     filial: document.getElementById('h-filial').value,
+    conf:   document.getElementById('h-conf').value,
   };
   localStorage.setItem('hf_filtros', JSON.stringify(f));
 }
@@ -1300,11 +1308,12 @@ function loadHF() {
     if (f.busca) document.getElementById('h-busca').value = f.busca;
     if (f.order)  document.getElementById('h-order').value  = f.order;
     if (f.filial) document.getElementById('h-filial').value = f.filial;
+    if (f.conf)   document.getElementById('h-conf').value   = f.conf;
   } catch(_) {}
 }
 
 function clearHF() {
-  ['h-dest','h-cat','h-filial','h-orig','h-sit','h-order'].forEach(id=>document.getElementById(id).value='');
+  ['h-dest','h-cat','h-filial','h-orig','h-sit','h-conf','h-order'].forEach(id=>document.getElementById(id).value='');
   ['h-mes','h-busca'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('h-order').value = 'data-desc';
   localStorage.removeItem('hf_filtros');
@@ -1319,12 +1328,15 @@ function getHistData() {
   const mes   = document.getElementById('h-mes').value;
   const busca = document.getElementById('h-busca').value.toLowerCase();
   const filial= document.getElementById('h-filial')?.value || '';
+  const conf  = document.getElementById('h-conf')?.value || '';
   const order = document.getElementById('h-order')?.value || 'data-desc';
   return dados.filter(d=>{
     if (dest   && d.destino!==dest && d.auxiliar!==dest) return false;
     if (cat    && d.categoria!==cat) return false;
     if (filial && (d.filial||'')!==filial) return false;
     if (orig   && d.origem!==orig) return false;
+    if (conf==='sim' && !d.conferido) return false;
+    if (conf==='nao' && d.conferido) return false;
     if (sit==='NONE' && d.situacao) return false;
     if (sit && sit!=='NONE' && d.situacao!==sit) return false;
     if (mes  && !d.data.startsWith(mes)) return false;
